@@ -308,6 +308,24 @@ const axis=(positive,negative)=>Number(positive)-Number(negative);
 const islandDecor=bench?null:Object.fromEntries([1,2,3].map(n=>[n,decorations(n)]));
 const tree=bench?null:treeMesh();
 const lampModels=bench?null:[lanternMesh(false,false),lanternMesh(true,false),lanternMesh(true,true)];
+const renderSprites=new Map();
+function renderSprite(key,paint){
+  if(renderSprites.has(key)) return renderSprites.get(key);
+  const sprite=document.createElement('canvas');
+  sprite.width=128;sprite.height=128;
+  paint(sprite.getContext('2d'));
+  renderSprites.set(key,sprite);
+  return sprite;
+}
+function shadeSprite(outline,body){
+  return renderSprite(outline+body,ctx=>{
+    function circle(x,y,r,fill){
+      ctx.beginPath();ctx.arc(x,y,r,0,2*Math.PI);ctx.fillStyle=fill;ctx.fill();
+    }
+    circle(64,64,61,outline);circle(64,64,57.7,body);
+    circle(48.3,52.4,7.4,outline);circle(79.7,52.4,7.4,outline);
+  });
+}
 function draw(now){
   const w=bench?1280:canvas.clientWidth,h=bench?720:canvas.clientHeight;
   const ratio=bench?1:Math.min(2,devicePixelRatio);
@@ -357,9 +375,13 @@ function draw(now){
     ctx.fillStyle=color;ctx.fill();
   }
   function glow(x,y,r,color){
-    const g=ctx.createRadialGradient(x,y,0,x,y,r);
-    g.addColorStop(0,color);g.addColorStop(1,'transparent');
-    disk(x,y,r,g);
+    if(r<=0) return;
+    const sprite=renderSprite('glow:'+color,gctx=>{
+      const gradient=gctx.createRadialGradient(64,64,0,64,64,64);
+      gradient.addColorStop(0,color);gradient.addColorStop(1,'transparent');
+      gctx.fillStyle=gradient;gctx.fillRect(0,0,128,128);
+    });
+    ctx.drawImage(sprite,x-r,y-r,2*r,2*r);
   }
   const world=worlds[night];
   const ambient=.15+.55*lit/view.lanterns.length;
@@ -429,7 +451,12 @@ function draw(now){
     {kind:bench?'benchmark-player':'player',pos:[px,py,pz]}
   ];
   const visible=entities.map(e=>({e,point:camera.project(e.pos)}))
-    .filter(({point})=>point)
+    .filter(({e,point})=>{
+      if(!point) return false;
+      const [x,y,scale]=point;
+      const margin=(e.kind==='lantern'?8:e.kind==='player'?8:4)*scale+30;
+      return x>=-margin&&x<=w+margin&&y>=-margin&&y<=h+margin;
+    })
     .sort((a,b)=>b.point[3]-a.point[3]);
   const playerScreen=bench?null:camera.project([px,py+1,pz]);
   for (const {e,point:[x,y,s]} of visible){
@@ -495,9 +522,9 @@ function draw(now){
       ctx.fillStyle='#c8102e';ctx.fillRect(x-.16*s,y-.60*s,.32*s,.48*s);
     } else if (e.kind==='shade'){
       const outline=palette.checked?'#00b3ff':'#7a3cff';
-      disk(x,y-.35*s,s*.74,outline);
-      disk(x,y-.35*s,s*.70,e.state==='stunned'?'#3a3450':'#120a1a');
-      disk(x-.19*s,y-.49*s,s*.09,outline);disk(x+.19*s,y-.49*s,s*.09,outline);
+      const r=s*.74*64/61;
+      const sprite=shadeSprite(outline,e.state==='stunned'?'#3a3450':'#120a1a');
+      ctx.drawImage(sprite,x-r,y-.35*s-r,2*r,2*r);
     } else if(e.kind==='benchmark-player'){
       disk(x,y-.65*s,.31*s,'#e8e2d0');disk(x,y-1.24*s,.18*s,'#eaba97');
     } else if(e.kind==='player'){

@@ -29,13 +29,23 @@ export function createGame(t,seed,s={},night=1){
   let lights=p.successful_lights??0;
   const capacity=()=>Math.min(t.capacity_max,t.carry_capacity+2*lights);
   const fuelValue=l=>Math.round(l.fuelUnits/6)/10;
-  const nearest=(list,pos)=>list.sort((a,b)=>dist(a.pos,pos)-dist(b.pos,pos)||idOrder(a,b))[0];
+  function nearest(list,pos){
+    let best,bestDistance=Infinity;
+    for(const candidate of list){
+      const distance=dist(candidate.pos,pos);
+      if(distance<bestDistance||(distance===bestDistance&&best&&idOrder(candidate,best)<0)){
+        best=candidate;bestDistance=distance;
+      }
+    }
+    return best;
+  }
   const lanterns=world.lamps.map((pos,i)=>{
     const id='L'+(i+1),patch=s.lanterns?.find(l=>l.id===id);
     const lamp={id,pos,lit:false,deposited:0,...patch};
     const fuelUnits=lamp.lit?Math.round((patch?.fuel??t.fuel_max)*60):0;
     return {...lamp,fuelUnits,ever_lit:lamp.lit||Boolean(patch?.ever_lit),relit_count:0};
   });
+  const benchmarkDark=s.benchmark?lanterns.filter(l=>!l.lit):null;
   let moteId=0,shadeId=0,drifterId=0;
   const motes=[];
   const addMote=(pos,kind='random')=>motes.push({id:'M'+(++moteId),pos,kind,until:kind==='dropped'?sim+480:null});
@@ -242,7 +252,7 @@ export function createGame(t,seed,s={},night=1){
       const weak=!s.benchmark&&q.state!=='chase'&&nearest(lanterns.filter(l=>l.lit&&l.fuelUnits<lowFuel),q.pos);
       q.state=survival||(!s.benchmark&&!weak&&d<=(q.state==='chase'?18:12))?'chase':'wander';
       speed=night===3?4.5:t.shade_speed;
-      const target=q.state==='chase'?{pos:p.pos}:weak||nearest(lanterns.filter(l=>!l.lit),q.pos);
+      const target=q.state==='chase'?{pos:p.pos}:weak||nearest(benchmarkDark??lanterns.filter(l=>!l.lit),q.pos);
       direction=target?away(target.pos,q.pos):[Math.cos(sim/180),Math.sin(sim/180)];
       if(target) speed=Math.min(speed,dist(target.pos,q.pos)*60);
       if(weak&&dist(q.pos,weak.pos)<=2){
