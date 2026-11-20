@@ -1,5 +1,9 @@
 # Đảo Đèn Lồng · v1.0.0
 
+[Video demo CP5](docs/demo/demo.mp4)
+
+![Đêm 1 trên Đảo Bến](docs/demo/gameplay.png)
+
 Điều khiển Mây qua Đảo Bến, Đảo Cau và Đảo Chuông. Gom đom đóm và giữ đủ đèn sáng tới bình minh.
 
 ## Chạy game

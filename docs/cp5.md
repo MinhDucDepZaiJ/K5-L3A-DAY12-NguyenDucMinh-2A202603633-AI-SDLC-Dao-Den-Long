@@ -14,11 +14,8 @@ node bench.mjs --seed 42 --duration 30 --out bench.json
 node --jitless --expose-gc soak.mjs --seed 7 --nights 10 --out soak.json
 ```
 
-## Thứ tự quay demo dưới 5 phút
+## Video demo
 
-1. Mở menu và vào Đêm 1. Quay đoạn nhặt đom đóm, tạm dừng rồi tiếp tục.
-2. Nếu có đủ đom đóm, thắp một đèn. Quay vòng an toàn và HUD.
-3. Chạy test, mở kết quả bench và báo cáo soak. Hiện cả số đo đạt lẫn số đo chưa đạt.
-4. Cho thấy Contract v1.3 và các tag. Nếu Sinh tồn đã mở khóa, quay vài giây ở cuối.
+[Video demo](demo/demo.mp4) gồm cảnh chơi thực do người dùng ghi trên Windows, sau đó là bảng tổng hợp kết quả kiểm thử, headless, soak và benchmark trước tối ưu. [Ảnh gameplay](demo/gameplay.png) được trích từ clip nguồn.
 
-Video và ảnh README chưa được ghi lại. Dùng video thật từ lần chơi trên bản nộp.
+Còn chờ benchmark sau tối ưu trên máy Windows, GitHub Release và link LMS.

@@ -7,7 +7,7 @@
 | 1 | Chạy được mô phỏng với 5 ca tự động và JSONL tất định. Lần chạy trên PowerShell phát hiện test phụ thuộc thư mục hiện tại. Đường dẫn script trong test đã đổi sang đường dẫn tương đối theo module. |
 | 2 | Chuẩn hóa bản đồ, mở rộng ba Đêm và tăng lên 11 ca. Test hồi quy bắt được các kỳ vọng về vận tốc, chi phí đèn và nhịp bất tử còn dùng số cũ. |
 | 3 | Đổi sang giữ đèn tới bình minh. 16 ca kiểm hao dầu, hút dầu, châm và thắp lại, điểm và thứ tự xử lý tick cuối. |
-| 4 | 19 ca đạt. Soak 10 Đêm có 0 crash với cấu hình phát hành. Còn thiếu số benchmark desktop, ảnh và video. |
+| 4 | 19 ca đạt. Soak 10 Đêm có 0 crash với cấu hình phát hành. Video và ảnh gameplay được bổ sung ở CP5. Còn chờ số FPS sau tối ưu. |
 
 ## Làm việc với AI
 

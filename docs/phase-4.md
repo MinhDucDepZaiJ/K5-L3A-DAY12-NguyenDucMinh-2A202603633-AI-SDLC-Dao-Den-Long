@@ -8,7 +8,7 @@
 | Bảng xếp hạng | Test top 10, thứ tự đồng điểm, Unicode, đọc lại dữ liệu từ tiến trình khác và xuất JSON. |
 | Accessibility | Đã triển khai đổi phím, ràng buộc trùng phím, phụ đề, chỉ hướng Bóng Mực, giảm chuyển động và chữ lớn. Cần xác nhận trực quan ở 1280×720. |
 | Phát hành | Có ZIP chạy bằng Node, tag phase-4 và v1.0.0 cục bộ. GitHub Release cần repo và quyền GitHub. |
-| Ảnh và demo | Chưa ghi được trực tiếp trong môi trường này. |
+| Ảnh và demo | Xem ảnh và video từ bản quay Windows ở [CP5](cp5.md). |
 
 ## Quyết định và giả định
 
