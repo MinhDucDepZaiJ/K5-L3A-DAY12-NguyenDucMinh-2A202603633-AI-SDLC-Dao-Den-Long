@@ -1,3 +1,4 @@
+import {mayModel} from './may.mjs';
 import {worlds,ramps} from './world.mjs';
 import {orbitCamera} from './camera.mjs';
 import {createGame} from './game.mjs';
@@ -58,7 +59,7 @@ addEventListener('keydown',event=>{
 });
 addEventListener('keyup',event=>keys.delete(event.code));
 addEventListener('blur',()=>keys.clear());
-let game, view, yaw, pitch, accumulator, pulseUntil;
+let game, view, yaw, pitch, accumulator, pulseUntil, facing;
 let drag = null;
 const wrapYaw = angle => ((angle % 360) + 360) % 360;
 canvas.addEventListener('pointerdown', event => {
@@ -138,6 +139,7 @@ function reset(){
   locationLabel.textContent=`Đêm ${night} · ${worlds[night].name}`;
   view=game.snapshot();
   yaw=0;
+  facing=0;
   pitch=26;
   accumulator=0;
   pulseUntil=0;
@@ -267,21 +269,21 @@ function draw(now){
       disk(x,y-.35*s,s*.70,e.state==='stunned'?'#3a3450':'#120a1a');
       disk(x-.19*s,y-.49*s,s*.09,'#7a3cff');disk(x+.19*s,y-.49*s,s*.09,'#7a3cff');
     } else {
-      disk(x,y-.63*s,s*.43,'#e8e2d0');
-      ctx.fillStyle='#c8102e';ctx.fillRect(x-.24*s,y-.95*s,.48*s,.13*s);
-      disk(x,y-1.15*s,s*.33,'#ebae83');
-      const hat=circle.filter((_,i)=>i%6===0)
-        .map(([dx,dz])=>[px+dx*.62,py+1.28,pz+dz*.62]);
-      const top=[px,py+1.78,pz];
-      const faces=hat.map((corner,i)=>{
-        const next=hat[(i+1)%hat.length];
-        return {vertices:[corner,next,top],color:i%2?'#efc379':'#dba865',
-          depth:camera.project(corner)[3]+camera.project(next)[3]};
-      });
-      faces.sort((a,b)=>b.depth-a.depth);
-      for (const face of faces) polygon(face.vertices,face.color);
-      glow(x+.45*s,y-1.04*s,.8*s,'#ffa545a0');
-      disk(x+.45*s,y-1.04*s,.15*s,'#ffd07e');
+      const moving=Math.hypot(view.player.vel[0],view.player.vel[2])>.05;
+      const stride=moving&&view.player.grounded?Math.sin(now/75)*.13:0;
+      const model=mayModel(e.pos,facing,stride);
+      const light=camera.project(model.lantern);
+      if(light) glow(light[0],light[1],light[2]*.48,'#ffb34799');
+      const faces=model.faces.map(({vertices,color})=>({points:camera.polygon(vertices),color}))
+        .filter(({points})=>points.length>=3)
+        .map(face=>({...face,depth:face.points.reduce((sum,p)=>sum+p[3],0)/face.points.length}))
+        .sort((a,b)=>b.depth-a.depth);
+      for(const {points,color} of faces){
+        ctx.beginPath();
+        ctx.moveTo(points[0][0],points[0][1]);
+        for(const [sx,sy] of points.slice(1)) ctx.lineTo(sx,sy);
+        ctx.closePath();ctx.fillStyle=color;ctx.fill();
+      }
       if (game.tick<pulseUntil) glow(x,y,s*(7-(pulseUntil-game.tick)/6),'#ffe18299');
     }
   }
@@ -300,6 +302,12 @@ function loop(now){
     if (events.some(e=>e.name==='pulse')) pulseUntil=game.tick+24;
     for(const event of events) if(tones[event.name]) sound(tones[event.name]);
     view=game.snapshot();
+    const [vx,,vz]=view.player.vel;
+    if(Math.hypot(vx,vz)>.05){
+      const target=Math.atan2(vx,vz);
+      const turn=Math.atan2(Math.sin(target-facing),Math.cos(target-facing));
+      facing+=turn*.28;
+    }
     if(wasGrounded&&view.player.vel[1]>0) sound(480);
     if(game.tick%60===0&&view.time_left_s<=10&&view.time_left_s>0) sound(840);
     if(night===3&&game.tick%1800===1680) sound(200,.6);

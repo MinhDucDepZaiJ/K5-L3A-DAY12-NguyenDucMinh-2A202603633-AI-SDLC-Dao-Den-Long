@@ -16,6 +16,10 @@ Mở http://127.0.0.1:8000 rồi chọn **Bắt đầu**. Dùng **WASD** hoặc 
 - Mỗi đom đóm nạp cộng 10 điểm, mỗi đèn sáng cộng 100 điểm, mỗi Bóng Mực trúng Tỏa Sáng cộng 5 điểm. Khi thắng, cộng 2 điểm mỗi giây nguyên còn lại và 50 điểm mỗi Ngọn Lửa còn lại. Bình Minh tổng hợp điểm ba Đêm đã thắng.
 - Menu tạm dừng cho phép tiếp tục, chơi lại Đêm, chỉnh âm lượng và độ nhạy chuột hoặc về menu chính. Hai thanh cài đặt được lưu trong trình duyệt.
 
+## Sáng tạo của tôi
+
+Mây mặc áo dài hai tà, để tóc dài và cầm đèn lồng ở tay phải. Mô hình dựng bằng hình học 3D trong mã nguồn.
+
 ## Kiểm chứng
 
 ```bash
