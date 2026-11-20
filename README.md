@@ -14,6 +14,8 @@ Mở http://127.0.0.1:8000. Dùng WASD/phím mũi tên để đi, kéo chuột t
 
 Mỗi đom đóm nhặt được cộng 10 điểm, đèn sáng cộng 100 điểm, mỗi Bóng Mực bị choáng cộng 25 điểm. Khi thắng, mỗi giây nguyên còn lại cộng 2 điểm và mỗi lửa còn lại cộng 50 điểm. Mép đảo chặn người chơi. Bị chạm mất lửa nhưng không rơi đom đóm.
 
+Nhấn **Esc** hoặc **Tạm dừng** để nghỉ. Nhấn **Tiếp tục** hoặc **Esc** để chơi tiếp từ vị trí cũ.
+
 ## Kiểm chứng
 
 ```bash

@@ -3,14 +3,28 @@ import {createGame,islandRadius} from './game.mjs';
 const {tuning}=await fetch('./game.contract.json').then(response=>response.json());
 const canvas=document.querySelector('canvas');
 const ctx=canvas.getContext('2d');
-const hud=document.querySelector('#hud');
-const status=document.querySelector('#status');
-const modal=document.querySelector('aside');
+const hud=Object.fromEntries(['lanterns','progress','flames','motes','time','score']
+  .map(id=>[id,document.getElementById(id)]));
+const status=document.getElementById('status');
+const pauseButton=document.getElementById('pause');
+const modal=document.querySelector('dialog');
+const modalTitle=document.getElementById('dialog-title');
+const modalDetail=document.getElementById('dialog-detail');
+const modalAction=document.getElementById('dialog-action');
+let paused=false;
 const keys=new Set();
 const controls=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD','KeyQ','KeyZ','KeyE','KeyF'];
 addEventListener('keydown',event=>{
-  if (controls.includes(event.code)) event.preventDefault();
-  keys.add(event.code);
+  if (event.code==='Escape' && game.state==='playing'){
+    event.preventDefault();
+    if (!event.repeat) setPaused(!paused);
+    return;
+  }
+  if (paused || game.state!=='playing' || event.target?.closest?.('button,summary')) return;
+  if (controls.includes(event.code)){
+    event.preventDefault();
+    keys.add(event.code);
+  }
 });
 addEventListener('keyup',event=>keys.delete(event.code));
 addEventListener('blur',()=>keys.clear());
@@ -18,7 +32,7 @@ let game, view, yaw, pitch, accumulator, pulseUntil;
 let drag = null;
 const wrapYaw = angle => ((angle % 360) + 360) % 360;
 canvas.addEventListener('pointerdown', event => {
-  if (drag || event.button !== 0 || game.state !== 'playing') return;
+  if (paused || drag || event.button !== 0 || game.state !== 'playing') return;
   drag = {id:event.pointerId,x:event.clientX,y:event.clientY};
   canvas.setPointerCapture(event.pointerId);
   canvas.classList.add('orbiting');
@@ -30,9 +44,38 @@ canvas.addEventListener('pointermove', event => {
   drag.x = event.clientX;
   drag.y = event.clientY;
 });
-canvas.addEventListener('lostpointercapture', () => {
-  drag = null;
+function stopOrbit(){
+  const id=drag?.id;
+  drag=null;
   canvas.classList.remove('orbiting');
+  if (id!==undefined && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+}
+canvas.addEventListener('lostpointercapture',stopOrbit);
+function showDialog(title,detail,action){
+  modalTitle.textContent=title;
+  modalDetail.textContent=detail;
+  modalAction.textContent=action;
+  modal.showModal();
+  modalAction.focus();
+}
+function setPaused(value){
+  if (game.state!=='playing' || paused===value) return;
+  paused=value;
+  keys.clear();
+  stopOrbit();
+  accumulator=0;
+  last=performance.now();
+  if (paused) showDialog('Đang tạm dừng','Tiếp tục để chơi từ chỗ bạn vừa dừng.','Tiếp tục');
+  else {
+    modal.close();
+    pauseButton.blur();
+  }
+}
+pauseButton.addEventListener('click',()=>setPaused(true));
+modalAction.addEventListener('click',()=>paused?setPaused(false):reset());
+modal.addEventListener('cancel',event=>{
+  event.preventDefault();
+  if (paused) setPaused(false);
 });
 function reset(){
   game=createGame(tuning,42);
@@ -42,9 +85,12 @@ function reset(){
   accumulator=0;
   pulseUntil=0;
   keys.clear();
-  modal.hidden=true;
+  paused=false;
+  stopOrbit();
+  if (modal.open) modal.close();
+  pauseButton.disabled=false;
+  pauseButton.blur();
 }
-modal.querySelector('button').onclick=reset;
 reset();
 let last=performance.now();
 const circle=Array.from({length:72},(_,i)=>[Math.cos(i*Math.PI/36),Math.sin(i*Math.PI/36)]);
@@ -138,9 +184,9 @@ function draw(now){
   }
 }
 function loop(now){
-  accumulator+=Math.min(.15,(now-last)/1000);
+  if (!paused && game.state==='playing') accumulator+=Math.min(.15,(now-last)/1000);
   last=now;
-  while (accumulator>=1/60 && game.state==='playing'){
+  while (!paused && accumulator>=1/60 && game.state==='playing'){
     accumulator-=1/60;
     yaw=wrapYaw(yaw+axis(pressed('KeyQ'),pressed('KeyZ'))*2);
     const events=game.step({move:[
@@ -150,14 +196,31 @@ function loop(now){
     if (events.some(e=>e.name==='pulse')) pulseUntil=game.tick+24;
     view=game.snapshot();
   }
-  draw(now);
-  hud.textContent=`Lửa ${view.player.flames} · Đom đóm ${view.player.carried}/${tuning.carry_capacity} · Đèn ${view.lanterns.filter(l=>l.lit).length}/5 · ${Math.ceil(view.time_left_s)} s · ${view.score} điểm`;
-  const near=view.lanterns.find(l=>!l.lit && Math.hypot(l.pos[0]-view.player.pos[0],l.pos[2]-view.player.pos[2])<=tuning.interact_radius);
-  status.textContent=near?`E · Nạp đèn ${near.id} (${near.deposited}/${tuning.lantern_cost})`:'';
-  if (game.state!=='playing' && modal.hidden){
-    modal.querySelector('h2').textContent=game.state==='won'?'Đảo đã sáng!':'Đêm đã khép lại';
-    modal.hidden=false;
+  draw(game.tick*1000/60);
+  updateHud();
+  if (game.state!=='playing' && !modal.open){
+    pauseButton.disabled=true;
+    stopOrbit();
+    showDialog(game.state==='won'?'Đảo đã sáng!':'Đêm đã khép lại',
+      `${view.lanterns.filter(l=>l.lit).length}/${view.lanterns.length} đèn đã thắp · ${view.score} điểm`,'Chơi lại');
   }
   requestAnimationFrame(loop);
+}
+function updateHud(){
+  const lit=view.lanterns.filter(l=>l.lit).length;
+  const seconds=Math.ceil(view.time_left_s);
+  const values={lanterns:`${lit}/${view.lanterns.length}`,flames:String(view.player.flames),
+    motes:`${view.player.carried}/${tuning.carry_capacity}`,
+    time:`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`,score:String(view.score)};
+  for (const [id,value] of Object.entries(values)){
+    if (hud[id].textContent!==value) hud[id].textContent=value;
+  }
+  hud.progress.max=view.lanterns.length;
+  hud.progress.value=lit;
+  const near=view.lanterns.find(l=>!l.lit && Math.hypot(l.pos[0]-view.player.pos[0],l.pos[2]-view.player.pos[2])<=tuning.interact_radius);
+  const hint=near && !paused && game.state==='playing'
+    ? (view.player.carried ? `E · Nạp đèn (${near.deposited}/${tuning.lantern_cost})` : 'Nhặt đom đóm để nạp đèn')
+    : '';
+  if (status.textContent!==hint) status.textContent=hint;
 }
 requestAnimationFrame(loop);
