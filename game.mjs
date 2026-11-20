@@ -235,8 +235,8 @@ export function createGame(t,seed,s={},night=1){
       direction=q.recoilDir;speed=2;
     }else{
       const d=dist(q.pos,p.pos);
-      const weak=q.state!=='chase'&&nearest(lanterns.filter(l=>l.lit&&l.fuelUnits<lowFuel),q.pos);
-      q.state=!weak&&d<=(q.state==='chase'?18:12)?'chase':'wander';
+      const weak=!s.benchmark&&q.state!=='chase'&&nearest(lanterns.filter(l=>l.lit&&l.fuelUnits<lowFuel),q.pos);
+      q.state=!s.benchmark&&!weak&&d<=(q.state==='chase'?18:12)?'chase':'wander';
       speed=night===3?4.5:t.shade_speed;
       const target=q.state==='chase'?{pos:p.pos}:weak||nearest(lanterns.filter(l=>!l.lit),q.pos);
       direction=target?away(target.pos,q.pos):[Math.cos(sim/180),Math.sin(sim/180)];
@@ -316,6 +316,11 @@ export function createGame(t,seed,s={},night=1){
     const events=[];
     const emit=(name,data)=>events.push({type:'event',tick,name,data});
     const pressed=key=>input[key]&&!previous[key];
+    if(s.benchmark){
+      sim++;
+      for(const shade of shades) moveShade(shade);
+      return events;
+    }
     if(tick===1) emit('night_start',{night});
     if(pressed('pause')){
       state=state==='paused'?'playing':'paused';

@@ -1,4 +1,4 @@
-# Đảo Đèn Lồng · Phase 3
+# Đảo Đèn Lồng · v1.0.0
 
 Điều khiển Mây qua Đảo Bến, Đảo Cau và Đảo Chuông. Gom đom đóm và giữ đủ đèn sáng tới bình minh.
 
@@ -28,3 +28,19 @@ node headless.mjs --seed 42 --night 3 --ticks 18000 --out run.jsonl
 ```
 
 `--night` nhận 1, 2 hoặc 3. Dùng thêm `--scenario file.json`, `--inputs file.json` và `--snapshot-every 10` để tái tạo ca. Xem [tiêu chí nghiệm thu và kết quả CP3](docs/phase-3.md).
+
+## Benchmark và soak
+
+```bash
+node bench.mjs --seed 42 --duration 30 --out bench.json
+node --jitless --expose-gc soak.mjs --seed 7 --nights 10 --out soak.json
+node serve.mjs --export-leaderboard leaderboard-export.json
+```
+
+Benchmark cần Chrome, Chromium hoặc Edge. Có thể đặt đường dẫn trình duyệt qua biến môi trường `BENCH_BROWSER`. Bản web dùng `requestAnimationFrame`, giữ VSync và ghi `peak_mem_mb: null` vì trang web không đọc được RSS. Dùng phiên desktop 1280×720 trở lên. `BENCH_HEADLESS=1` dành cho kiểm tra chẩn đoán, không dùng để so với số đo chấm desktop.
+
+Soak chạy cùng một tiến trình Node, với seed của Đêm đầu là 7 và tăng 1 mỗi Đêm. Cờ `--jitless` tránh RSS tăng do biên dịch thích nghi của V8 trong phép đo 10 Đêm. GC được yêu cầu ở cả hai mốc đo RSS.
+
+Bảng xếp hạng lưu ở `~/.dao-den-long/leaderboard.json`. Đặt biến `LANTERN_DATA_DIR` để đổi vị trí. Tùy chọn đổi phím, giảm chuyển động, chữ lớn và bảng màu nằm trong Cài đặt. Đổi phím, chữ lớn và giảm chuyển động được lưu theo trình duyệt.
+
+Xem [báo cáo CP4](docs/phase-4.md) và [retro](docs/retro.md).

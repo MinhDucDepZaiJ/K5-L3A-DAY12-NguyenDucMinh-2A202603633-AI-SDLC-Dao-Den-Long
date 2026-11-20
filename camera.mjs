@@ -1,7 +1,7 @@
 const NEAR = 0.35;
 const DISTANCE = 7.5;
 
-export function orbitCamera(target, yaw, pitch, width, height) {
+export function orbitCamera(target, yaw, pitch, width, height, distance=DISTANCE, centerY=.55) {
   const radians = Math.PI / 180;
   const ca = Math.cos(yaw * radians), sa = Math.sin(yaw * radians);
   const cp = Math.cos(pitch * radians), sp = Math.sin(pitch * radians);
@@ -10,11 +10,11 @@ export function orbitCamera(target, yaw, pitch, width, height) {
   function toCamera([x,y,z]) {
     const dx = x - target[0], up = y - target[1], dz = z - target[2];
     const forward = dx * sa + dz * ca;
-    return [dx * ca - dz * sa, up * cp + forward * sp, DISTANCE + forward * cp - up * sp];
+    return [dx * ca - dz * sa, up * cp + forward * sp, distance + forward * cp - up * sp];
   }
   function toScreen([right,up,depth]) {
     const scale = focal / depth;
-    return [width * 0.5 + right * scale, height * 0.55 - up * scale, scale, depth];
+    return [width * 0.5 + right * scale, height * centerY - up * scale, scale, depth];
   }
   function project(world) {
     const point = toCamera(world);

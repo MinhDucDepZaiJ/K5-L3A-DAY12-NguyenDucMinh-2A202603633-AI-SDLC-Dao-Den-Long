@@ -9,3 +9,6 @@ Tọa độ chuẩn đặt trong world.mjs. Chạy node --test và smoke cả ba
 
 Phase 3 dùng Contract v1.2. Xem docs/phase-3.md và CHANGELOG.md.
 Xử lý hao dầu và hút dầu trước tương tác, kiểm kết quả bình minh cuối tick. Không làm tròn dầu nội bộ.
+
+Phase 4 dùng Contract v1.3. Chạy node --test và lệnh soak_cmd được khai báo.
+Ghi số benchmark thực, nêu cấu hình đo và không dùng cảnh gameplay tùy chỉnh để đo.

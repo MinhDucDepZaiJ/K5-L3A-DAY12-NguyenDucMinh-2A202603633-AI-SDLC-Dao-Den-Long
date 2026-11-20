@@ -1,8 +1,11 @@
+import {benchmarkScene,frameStats} from './bench-scene.mjs';
 import {mayModel} from './may.mjs';
 import {worlds,ramps} from './world.mjs';
 import {orbitCamera} from './camera.mjs';
 import {createGame} from './game.mjs';
 const {tuning}=await fetch('./game.contract.json').then(response=>response.json());
+const query=new URLSearchParams(location.search);
+const bench=query.has('bench');
 const canvas=document.querySelector('canvas');
 const ctx=canvas.getContext('2d');
 const hud=Object.fromEntries(['lanterns','progress','flames','motes','time','score']
@@ -54,17 +57,68 @@ const tones={mote_picked:720,lantern_lit:1050,pulse:190,player_hit:110,shade_spa
   charm_picked:890,drifter_steal:240,drifter_drop:610};
 
 const keys=new Set();
-const controls=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD','KeyQ','KeyZ','KeyE','KeyF','ShiftLeft','ShiftRight'];
+const defaults={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',jump:'Space',dash:'ShiftLeft',
+  interact:'KeyE',pulse:'KeyF',pause:'Escape'};
+const aliases={up:'ArrowUp',down:'ArrowDown',left:'ArrowLeft',right:'ArrowRight',pause:'KeyP',dash:'ShiftRight'};
+const labels={up:'Tiến',down:'Lùi',left:'Trái',right:'Phải',jump:'Nhảy',dash:'Lướt',interact:'Nạp đèn',pulse:'Tỏa sáng',pause:'Tạm dừng'};
+const keyList=document.getElementById('key-list'),keyNotice=document.getElementById('key-notice');
+const reduceMotion=document.getElementById('reduce-motion'),largeText=document.getElementById('large-text');
+const subtitles=document.getElementById('subtitles'),shadeArrow=document.getElementById('shade-arrow');
+const scoreForm=document.getElementById('score-form'),scoreName=document.getElementById('score-name');
+const scoreMessage=document.getElementById('score-message'),rankList=document.getElementById('rank-list');
+let bindings={...defaults},capture=null,nightsWon=0,spawnWarning=null,scorePending=false;
+const campaignSeed=42;
+try{
+  Object.assign(bindings,JSON.parse(localStorage.getItem('bindings')??'{}'));
+  reduceMotion.checked=JSON.parse(localStorage.getItem(reduceMotion.id)??'false');
+  largeText.checked=JSON.parse(localStorage.getItem(largeText.id)??'false');
+}catch{}
+for(const control of [reduceMotion,largeText]){
+  function apply(){
+    document.body.classList.toggle(control.id,control.checked);
+    try{localStorage.setItem(control.id,JSON.stringify(control.checked));}catch{}
+  }
+  control.addEventListener('change',apply);apply();
+}
+const keyName=code=>code.replace(/^Key/,'').replace(/^Digit/,'').replace(/^ShiftLeft$/,'Shift');
+const matches=(action,code)=>bindings[action]===code||
+  (bindings[action]===defaults[action]&&aliases[action]===code&&!Object.values(bindings).includes(code));
+function updateKeys(){
+  keyList.replaceChildren();
+  for(const [action,label] of Object.entries(labels)){
+    const button=document.createElement('button');
+    button.type='button';button.className='secondary';
+    button.textContent=label+' · '+keyName(bindings[action]);
+    button.onclick=()=>{capture=action;keyNotice.textContent='Nhấn phím mới cho '+label+'.';};
+    keyList.append(button);
+  }
+  for(const hint of document.querySelectorAll('[data-key]')) hint.textContent=keyName(bindings[hint.dataset.key]);
+  pauseButton.setAttribute('aria-keyshortcuts',keyName(bindings.pause));
+  try{localStorage.setItem('bindings',JSON.stringify(bindings));}catch{}
+}
+document.getElementById('reset-keys').onclick=()=>{
+  bindings={...defaults};capture=null;updateKeys();keyNotice.textContent='Đã khôi phục phím mặc định.';
+};
+updateKeys();
 addEventListener('keydown',event=>{
-  if (['Escape','KeyP'].includes(event.code) && (screen==='play'||screen==='pause')){
+  if(capture){
     event.preventDefault();
-    if (!event.repeat) setPaused(!paused);
+    if(event.repeat) return;
+    if(['Tab','KeyQ','KeyZ'].includes(event.code)||Object.keys(bindings).some(a=>a!==capture&&matches(a,event.code))){
+      keyNotice.textContent='Phím trùng hoặc được dành cho điều hướng. Chọn phím khác.';
+      return;
+    }
+    bindings[capture]=event.code;capture=null;updateKeys();keyNotice.textContent='Đã lưu phím.';
     return;
   }
-  if (screen!=='play' || paused || game.state!=='playing' || event.target?.closest?.('button,summary')) return;
-  if (controls.includes(event.code)){
+  if(matches('pause',event.code)&&(screen==='play'||screen==='pause')){
     event.preventDefault();
-    keys.add(event.code);
+    if(!event.repeat) setPaused(!paused);
+    return;
+  }
+  if(screen!=='play'||paused||event.target?.closest?.('button,summary')) return;
+  if(['KeyQ','KeyZ'].includes(event.code)||Object.keys(bindings).some(a=>matches(a,event.code))){
+    event.preventDefault();keys.add(event.code);
   }
 });
 addEventListener('keyup',event=>keys.delete(event.code));
@@ -98,6 +152,8 @@ function showDialog(title,detail,action,onAction,extras=[]){
   modalDetail.textContent=detail;
   modalAction.textContent=action;
   primaryAction=onAction;
+  capture=null;
+  scoreForm.hidden=true;rankList.hidden=true;
   settings.hidden=screen!=='settings';
   actions.replaceChildren();
   for(const [label,handler] of extras){
@@ -111,9 +167,48 @@ function showDialog(title,detail,action,onAction,extras=[]){
 function menu(){
   screen='menu';
   showDialog('Đảo Đèn Lồng','Thu đom đóm, châm dầu và giữ đảo sáng đến bình minh.','Bắt đầu',()=>{
-    night=1;total=0;intro();
-  },[['Cài đặt',()=>showSettings('menu')]]);
+    night=1;total=0;nightsWon=0;intro();
+  },[['Bảng xếp hạng',showLeaderboard],['Cài đặt',()=>showSettings('menu')]]);
 }
+async function showLeaderboard(){
+  screen='leaderboard';
+  showDialog('Bảng xếp hạng','Điểm cao trên máy này.','Về menu',menu);
+  rankList.replaceChildren();rankList.hidden=false;
+  try{
+    const response=await fetch('/leaderboard',{cache:'no-store'});
+    if(!response.ok) throw new Error();
+    const {entries}=await response.json();
+    if(screen!=='leaderboard') return;
+    for(const {name,score,nights_won} of entries){
+      const row=document.createElement('li');
+      row.textContent=`${name} · ${score} điểm · ${nights_won}/3 Đêm`;
+      rankList.append(row);
+    }
+    if(!entries.length) modalDetail.textContent='Chưa có điểm được lưu.';
+  }catch{if(screen==='leaderboard') modalDetail.textContent='Không đọc được điểm trên máy.';}
+}
+function offerScore(){
+  scoreForm.hidden=false;scoreName.value='';scoreMessage.textContent='';
+  scoreForm.querySelector('button').disabled=scorePending;
+}
+scoreForm.addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(scorePending||scoreForm.hidden) return;
+  const name=scoreName.value.trim().normalize('NFC');
+  if(!/^[\p{L}0-9_]{3,12}$/u.test(name)){
+    scoreMessage.textContent='Dùng 3–12 chữ cái, chữ số hoặc dấu gạch dưới.';
+    return;
+  }
+  const button=scoreForm.querySelector('button');
+  scorePending=true;button.disabled=true;
+  try{
+    const response=await fetch('/leaderboard',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,score:total,nights_won:nightsWon,seed:campaignSeed})});
+    if(!response.ok) throw new Error();
+    scoreMessage.textContent='Đã lưu điểm.';
+  }catch{scoreMessage.textContent='Chưa lưu được điểm. Thử lại.';button.disabled=false;}
+  finally{scorePending=false;}
+});
 function intro(){
   screen='intro';
   const lore=['Giữ ít nhất ba đèn sáng đến bình minh.','Qua cầu tre hoặc dùng bục nhảy để sang đảo bên.','Theo dốc lên tầng cao và chú ý gió mạnh.'];
@@ -145,7 +240,8 @@ modal.addEventListener('cancel',event=>{
 });
 function reset(){
   screen='play';
-  game=createGame(tuning,42,{},night);
+  game=createGame(tuning,campaignSeed,{},night);
+  spawnWarning=null;
   locationLabel.textContent=`Đêm ${night} · ${worlds[night].name}`;
   view=game.snapshot();
   yaw=0;
@@ -162,15 +258,15 @@ function reset(){
   pauseButton.blur();
 }
 let last=performance.now();
-reset();
-menu();
+if(!bench){reset();menu();}
 const circle=Array.from({length:72},(_,i)=>[Math.cos(i*Math.PI/36),Math.sin(i*Math.PI/36)]);
 const stars=Array.from({length:95},(_,i)=>[(i*0.6180339)%1,(i*0.4142135)%1,0.6+i%3/3]);
 const pressed=(...codes)=>codes.some(code=>keys.has(code));
+const actionDown=action=>[...keys].some(code=>matches(action,code));
 const axis=(positive,negative)=>Number(positive)-Number(negative);
 function draw(now){
-  const w=canvas.clientWidth,h=canvas.clientHeight;
-  const ratio=Math.min(2,devicePixelRatio);
+  const w=bench?1280:canvas.clientWidth,h=bench?720:canvas.clientHeight;
+  const ratio=bench?1:Math.min(2,devicePixelRatio);
   if (canvas.width!==Math.round(w*ratio)||canvas.height!==Math.round(h*ratio)) {
     canvas.width=Math.round(w*ratio);
     canvas.height=Math.round(h*ratio);
@@ -190,7 +286,9 @@ function draw(now){
     }
   }
   const [px,py,pz]=view.player.pos;
-  const camera=orbitCamera([px,py+1.1,pz],yaw,pitch,w,h);
+  const camera=bench
+    ?orbitCamera([0,0,0],270-now*360/15000,Math.atan(.5)*180/Math.PI,w,h,Math.hypot(30,15),.5)
+    :orbitCamera([px,py+1.1,pz],yaw,pitch,w,h);
   function polygon(vertices, color){
     const points=camera.polygon(vertices);
     if (points.length<3) return;
@@ -254,7 +352,7 @@ function draw(now){
     ...view.shades.map(s=>({kind:'shade',...s})),
     ...view.drifters.map(d=>({...d,kind:'drifter'})),
     ...view.charms.flatMap((c,i)=>c.available&&world.charms?.[i]?[{kind:'charm',pos:world.charms[i]}]:[]),
-    {kind:'player',pos:[px,py,pz]}
+    {kind:bench?'benchmark-player':'player',pos:[px,py,pz]}
   ];
   const visible=entities.map(e=>({e,point:camera.project(e.pos)}))
     .filter(({point})=>point)
@@ -266,7 +364,7 @@ function draw(now){
       disk(x,b,s*.125,'#fff6c2');
     } else if (e.kind==='lantern'){
       const low=e.lit&&e.fuel<tuning.low_fuel_threshold;
-      const dim=low&&now%1000>=500;
+      const dim=low&&!reduceMotion.checked&&now%1000>=500;
       if(e.lit&&!dim) glow(x,y-1.7*s,4*s,'#ffb24e8a');
       ctx.fillStyle='#78614d';ctx.fillRect(x-.10*s,y-2.1*s,.20*s,2.1*s);
       ctx.beginPath();ctx.ellipse(x,y-2.1*s,.61*s,(e.lit?.61:.488)*s,0,0,Math.PI*2);
@@ -294,6 +392,8 @@ function draw(now){
       disk(x,y-.35*s,s*.74,outline);
       disk(x,y-.35*s,s*.70,e.state==='stunned'?'#3a3450':'#120a1a');
       disk(x-.19*s,y-.49*s,s*.09,outline);disk(x+.19*s,y-.49*s,s*.09,outline);
+    } else if(e.kind==='benchmark-player'){
+      disk(x,y-.65*s,.31*s,'#e8e2d0');disk(x,y-1.24*s,.18*s,'#eaba97');
     } else {
       const moving=Math.hypot(view.player.vel[0],view.player.vel[2])>.05;
       const stride=moving&&view.player.grounded?Math.sin(now/75)*.13:0;
@@ -310,7 +410,7 @@ function draw(now){
         for(const [sx,sy] of points.slice(1)) ctx.lineTo(sx,sy);
         ctx.closePath();ctx.fillStyle=color;ctx.fill();
       }
-      if (game.tick<pulseUntil) glow(x,y,s*(7-(pulseUntil-game.tick)/6),'#ffe18299');
+      if (!reduceMotion.checked&&game.tick<pulseUntil) glow(x,y,s*(7-(pulseUntil-game.tick)/6),'#ffe18299');
     }
   }
 }
@@ -322,12 +422,14 @@ function loop(now){
     yaw=wrapYaw(yaw+axis(pressed('KeyQ'),pressed('KeyZ'))*2);
     const wasGrounded=view.player.grounded;
     const events=game.step({move:[
-      axis(pressed('KeyD','ArrowRight'),pressed('KeyA','ArrowLeft')),
-      axis(pressed('KeyW','ArrowUp'),pressed('KeyS','ArrowDown'))
-    ],cam_yaw_deg:yaw,jump:pressed('Space'),interact:pressed('KeyE'),pulse:pressed('KeyF'),dash:pressed('ShiftLeft','ShiftRight')});
+      axis(actionDown('right'),actionDown('left')),
+      axis(actionDown('up'),actionDown('down'))
+    ],cam_yaw_deg:yaw,jump:actionDown('jump'),interact:actionDown('interact'),pulse:actionDown('pulse'),dash:actionDown('dash')});
     if (events.some(e=>e.name==='pulse')) pulseUntil=game.tick+24;
     for(const event of events) if(tones[event.name]) sound(tones[event.name]);
     view=game.snapshot();
+    const spawned=events.find(event=>event.name==='shade_spawned');
+    if(spawned) spawnWarning={id:spawned.data.id,until:game.tick+180};
     const [vx,,vz]=view.player.vel;
     if(Math.hypot(vx,vz)>.05){
       const target=Math.atan2(vx,vz);
@@ -344,12 +446,13 @@ function loop(now){
   if(screen==='play'&&game.state!=='playing'){
     screen='result';pauseButton.disabled=true;stopOrbit();
     if(game.state==='won'){
-      total+=view.score;sound(1046,.55);
-      if(night===3) showDialog('Bình Minh',`Tổng điểm ba Đêm: ${total}`,'Về menu',menu);
+      total+=view.score;nightsWon++;sound(1046,.55);
+      if(night===3){showDialog('Bình Minh',`Tổng điểm ba Đêm: ${total}`,'Về menu',menu);offerScore();}
       else showDialog('Đảo đã sáng!',`${view.score} điểm · Tổng: ${total}`,'Đêm tiếp theo',()=>{night++;intro();});
     }else{
       sound(130,.6);
-      showDialog('Đêm đã khép lại',`${view.score} điểm`,'Chơi lại Đêm',reset,[['Về menu',menu]]);
+      showDialog('Đêm đã khép lại',`Điểm các Đêm đã thắng: ${total}`,'Chơi lại Đêm',reset,[['Về menu',menu]]);
+      offerScore();
     }
   }
   requestAnimationFrame(loop);
@@ -368,7 +471,7 @@ function updateHud(){
     slot.hidden=i>=view.player.capacity;
     slot.classList.toggle('filled',i<view.player.carried);
   }
-  cooldowns.textContent=`Shift · Lướt ${view.player.dash_cd_s?view.player.dash_cd_s.toFixed(1)+'s':'sẵn sàng'} | F · Tỏa sáng ${view.player.pulse_cd_s?view.player.pulse_cd_s.toFixed(1)+'s':'sẵn sàng'}`;
+  cooldowns.textContent=`${keyName(bindings.dash)} · Lướt ${view.player.dash_cd_s?view.player.dash_cd_s.toFixed(1)+'s':'sẵn sàng'} | ${keyName(bindings.pulse)} · Tỏa sáng ${view.player.pulse_cd_s?view.player.pulse_cd_s.toFixed(1)+'s':'sẵn sàng'}`;
   document.body.classList.toggle('game-paused',paused);
   hud.progress.max=view.lanterns.length;
   document.getElementById('goal').textContent=Math.ceil(tuning.win_ratio*view.lanterns.length);
@@ -377,8 +480,48 @@ function updateHud(){
     .filter(({l,d})=>(!l.lit||l.fuel<tuning.fuel_max)&&d<=tuning.interact_radius)
     .sort((a,b)=>a.d-b.d||a.l.id.localeCompare(b.l.id))[0]?.l;
   const hint=near && !paused && game.state==='playing'
-    ? (view.player.carried ? (near.lit?`E · Châm dầu (${near.fuel.toFixed(1)}/100)`:`E · Nạp ánh sáng (${near.deposited}/${near.ever_lit?tuning.relight_cost:tuning.lantern_cost})`) : 'Nhặt đom đóm để nạp đèn')
+    ? (view.player.carried ? (near.lit?`${keyName(bindings.interact)} · Châm dầu (${near.fuel.toFixed(1)}/100)`:`${keyName(bindings.interact)} · Nạp ánh sáng (${near.deposited}/${near.ever_lit?tuning.relight_cost:tuning.lantern_cost})`) : 'Nhặt đom đóm để nạp đèn')
     : (night===3&&view.sim_tick%1800>=1680?'Gió mạnh sắp đến':view.wind.active?'Gió mạnh':'');
+  const spawn=screen==='play'&&spawnWarning&&game.tick<spawnWarning.until
+    ? view.shades.find(shade=>shade.id===spawnWarning.id):null;
+  shadeArrow.hidden=!spawn;
+  if(spawn){
+    const [x,,z]=view.player.pos;
+    const angle=Math.atan2(spawn.pos[0]-x,spawn.pos[2]-z)-yaw*Math.PI/180;
+    const dx=Math.sin(angle),dy=-Math.cos(angle),limit=.43/Math.max(Math.abs(dx),Math.abs(dy));
+    shadeArrow.style.left=`${50+100*dx*limit}%`;shadeArrow.style.top=`${50+100*dy*limit}%`;
+    shadeArrow.style.rotate=`${angle}rad`;
+  }
+  const alerts=[];
+  if(spawn) alerts.push('Bóng Mực xuất hiện');
+  if(night===3&&view.sim_tick%1800>=1680) alerts.push('Gió mạnh sắp thổi');
+  if(seconds<=10&&seconds>0) alerts.push(`${seconds} giây cuối`);
+  if(view.lanterns.some(l=>l.lit&&l.fuel<tuning.low_fuel_threshold)) alerts.push('Có đèn sắp cạn dầu');
+  const caption=screen==='play'?alerts.join(' · '):'';
+  if(subtitles.textContent!==caption) subtitles.textContent=caption;
   if (status.textContent!==hint) status.textContent=hint;
 }
-requestAnimationFrame(loop);
+if(bench){
+  document.body.classList.add('benchmark');
+  game=createGame(tuning,Number(query.get('bench')),benchmarkScene(Number(query.get('bench'))));
+  const input={move:[0,0],cam_yaw_deg:0};
+  const samples=[];
+  const duration=Number(query.get('duration'))*1000;
+  let start,previous,firstFrame,steps=0;
+  function measure(now){
+    start??=now;
+    const elapsed=now-start;
+    const nextStep=Math.floor(elapsed*60/1000);
+    while(steps<nextStep){game.step(input);steps++;}
+    view=game.snapshot();
+    draw(elapsed);
+    firstFrame??=performance.timeOrigin+performance.now();
+    if(previous!==undefined&&previous-start>=3000&&elapsed<=3000+duration) samples.push(now-previous);
+    previous=now;
+    if(elapsed>=3000+duration){
+      const result={...frameStats(samples),first_frame_epoch_ms:firstFrame,browser:navigator.userAgent};
+      void fetch('/benchmark-result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(result)});
+    }else requestAnimationFrame(measure);
+  }
+  requestAnimationFrame(measure);
+}else requestAnimationFrame(loop);

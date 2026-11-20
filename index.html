@@ -53,6 +53,21 @@ dialog p{margin:10px 0 18px;color:var(--muted)}
 @media(prefers-reduced-motion:reduce){.urgent{animation:none}}
 @media(max-width:900px){#slots{bottom:112px}#cooldowns{bottom:145px}}
 @media(max-width:560px){header{width:185px;min-width:0}#results{top:62px}#clock{top:130px}}
+.benchmark :is(header,footer,#pause,#status,#clock,#results,#slots,#cooldowns,#arrow){display:none}
+.benchmark canvas{width:1280px;height:720px}
+html{font-size:18px}
+body,button,summary,input,h1,.location,dt,.goal,.controls,#cooldowns{font-size:1rem}
+.large-text :is(button,summary,input,h1,.location,dt,dd,.goal,.controls,#cooldowns,#clock,#results,#status,dialog,#subtitles){font-size:1.25rem}
+.reduce-motion .urgent{animation:none}
+#key-list{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:6px 0}
+dialog{max-height:92dvh;overflow:auto;width:min(510px,calc(100% - 32px))}
+#score-name{width:10em;padding:6px}#score-form{margin-top:12px}
+#rank-list{text-align:left}
+#subtitles{position:fixed;top:92px;left:50%;translate:-50%;background:#131728ed;padding:6px 12px;border-radius:8px}
+#subtitles:empty{display:none}
+#shade-arrow{position:fixed;translate:-50% -50%;font-size:1.65rem;color:#ff5a5f;pointer-events:none;text-shadow:0 0 6px #131728}
+.accessible-palette #shade-arrow{color:#fff}
+.benchmark :is(#subtitles,#shade-arrow){display:none}
 </style>
 <canvas aria-label="Sân chơi Đêm 1"></canvas>
 <header class="panel" aria-label="Tiến độ màn chơi">
@@ -70,17 +85,19 @@ dialog p{margin:10px 0 18px;color:var(--muted)}
 <div id="cooldowns" class="panel"></div>
 <div id="arrow" hidden aria-label="Hướng đến đèn chưa thắp">▲</div>
 <button id="pause" type="button" aria-keyshortcuts="Escape">⏸ Tạm dừng</button>
+<div id="shade-arrow" hidden aria-hidden="true">▲</div>
+<div id="subtitles" role="status"></div>
 <p id="status" role="status"></p>
 <footer class="panel">
   <details open>
     <summary>Điều khiển</summary>
     <div class="controls">
-      <span><kbd>WASD</kbd> Di chuyển</span>
+      <span><kbd data-key="up">W</kbd> <kbd data-key="left">A</kbd> <kbd data-key="down">S</kbd> <kbd data-key="right">D</kbd> Di chuyển</span>
       <span>Kéo chuột / <kbd>Q</kbd> <kbd>Z</kbd> Xoay camera</span>
-      <span><kbd>Space</kbd> Nhảy</span>
-      <span><kbd>E</kbd> Nạp đèn</span>
-      <span><kbd>F</kbd> Tỏa sáng</span>
-      <span><kbd>Shift</kbd> Lướt</span><span><kbd>Esc</kbd> / <kbd>P</kbd> Tạm dừng</span>
+      <span><kbd data-key="jump">Space</kbd> Nhảy</span>
+      <span><kbd data-key="interact">E</kbd> Nạp đèn</span>
+      <span><kbd data-key="pulse">F</kbd> Tỏa sáng</span>
+      <span><kbd data-key="dash">Shift</kbd> Lướt</span><span><kbd data-key="pause">Esc</kbd> Tạm dừng</span>
     </div>
   </details>
 </footer>
@@ -91,8 +108,21 @@ dialog p{margin:10px 0 18px;color:var(--muted)}
     <label>Âm lượng <input id="volume" type="range" min="0" max="1" step=".05" value=".4"></label>
     <label>Độ nhạy chuột <input id="sensitivity" type="range" min=".25" max="2" step=".05" value="1"></label>
     <label><input id="accessible-palette" type="checkbox"> Bảng màu dễ phân biệt</label>
+    <label><input id="reduce-motion" type="checkbox"> Giảm chuyển động</label>
+    <label><input id="large-text" type="checkbox"> Chữ lớn ×1,25</label>
+    <details><summary>Đổi phím</summary><div id="key-list"></div>
+      <button id="reset-keys" class="secondary" type="button">Khôi phục mặc định</button>
+      <p id="key-notice" role="status"></p>
+    </details>
   </div>
-  <button id="dialog-action" type="button" autofocus></button>
+  <form id="score-form" hidden>
+    <label for="score-name">Tên xếp hạng</label>
+    <input id="score-name" required minlength="3" maxlength="12">
+    <button type="submit">Lưu điểm</button>
+    <p id="score-message" role="status"></p>
+  </form>
+  <ol id="rank-list" hidden></ol>
+  <button id="dialog-action"  type="button" autofocus></button>
   <div id="dialog-actions"></div>
 </dialog>
 <script type="module" src="./view.mjs"></script>
