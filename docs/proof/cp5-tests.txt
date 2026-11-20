@@ -1,0 +1,30 @@
+✔ campaign replay restores the exact simulation state (37.811046ms)
+✔ the safe zone disappears below the exact fuel threshold (1.678182ms)
+✔ survival opens with six shades and each mote reloads thirty rounds (1.568625ms)
+✔ tick 0, yaw, movement normalization, held frame fields and jump (150.185086ms)
+✔ pickup, partial deposit, held interact, relight and win (241.286544ms)
+✔ pulse consumes light once, pushes shade and reports stun (85.332093ms)
+✔ invulnerability, flame loss, safe lantern and dawn (236.716412ms)
+✔ malformed input and scenario exit 2 (226.574363ms)
+✔ pause separates tick and sim_tick without advancing dash cooldown (93.394231ms)
+✔ fall costs one flame, loses carried motes and respawns after 60 ticks (82.973212ms)
+✔ Night 2 pad launches toward other island and charm allows repeated dashes (169.403225ms)
+✔ Night 2 drifter steals once and pulse drops stolen motes (92.263618ms)
+✔ Night 3 layout and scheduled wind use simulation ticks (221.272713ms)
+✔ zero flames wins the precedence check over lit lanterns and dawn (86.532424ms)
+✔ all lit does not end the night before dawn (87.065295ms)
+✔ refuel, extinguish, relight and expand capacity (228.06853ms)
+✔ draining stacks with passive decay and reports every 60 continuous ticks (101.796333ms)
+✔ pulse stopping a drain earns 15 points (86.778394ms)
+✔ dawn threshold uses only lit lanterns after final fuel update (172.169096ms)
+✔ benchmark scene is deterministic and holds its standard population (102.320933ms)
+✔ benchmark computes average, p95 and slowest one percent (0.290962ms)
+✔ leaderboard persists top ten, tie order and CLI output (255.172432ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2561.523839

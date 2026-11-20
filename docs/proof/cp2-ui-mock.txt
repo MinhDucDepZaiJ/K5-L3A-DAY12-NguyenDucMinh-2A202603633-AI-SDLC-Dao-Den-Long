@@ -1,0 +1,1 @@
+Mock DOM with pre-lit lantern fixtures: settings storage, pause, three-night progression and dawn score 2424 passed.

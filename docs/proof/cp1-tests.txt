@@ -1,0 +1,13 @@
+✔ tick 0, yaw, movement normalization, held frame fields and jump (106.74195ms)
+✔ pickup, partial deposit, held interact, relight and win (174.699072ms)
+✔ pulse consumes light once, pushes shade and reports stun (107.247785ms)
+✔ invulnerability, flame loss, safe lantern and dawn (194.102912ms)
+✔ malformed input and scenario exit 2 (176.019959ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 945.798243

@@ -1,0 +1,5 @@
+Linux-6.18.57-x86_64-with-glibc2.41 v24.22.3
+1 elapsed_s=0.520 {'type': 'end', 'ticks': 18000, 'state': 'lost', 'score': 0}
+2 elapsed_s=0.490 {'type': 'end', 'ticks': 19800, 'state': 'lost', 'score': 0}
+3 elapsed_s=0.315 {'type': 'end', 'ticks': 21600, 'state': 'lost', 'score': 0}
+determinism_sha256 12e75bfc0edda44b5b00cad77a43b99234fc0a30dba074e2f21cb44807f6f710
