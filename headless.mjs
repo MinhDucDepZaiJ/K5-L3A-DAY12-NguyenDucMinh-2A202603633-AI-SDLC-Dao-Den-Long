@@ -21,12 +21,12 @@ function validateScenario(s,t,night) {
   fields(s,{time_left_s:x=>Number.isFinite(x)&&x>=0,random_motes:bool,random_shades:bool,random_drifters:bool,wind_enabled:bool,drifters:Array.isArray,charms:Array.isArray,
     player:x=>object(x),motes:x=>Array.isArray(x)&&x.every(pos),
     shades:Array.isArray,lanterns:Array.isArray},'scenario');
-  if (s.player) fields(s.player,{pos,carried:x=>count(x)&&x<=t.carry_capacity,flames:count,invuln_ticks:count,dash_cd_ticks:count,pulse_cd_ticks:count,charm_ticks:count},'player');
+  if (s.player) fields(s.player,{pos,successful_lights:count,carried:x=>count(x)&&x<=Math.min(t.capacity_max,t.carry_capacity+2*(s.player.successful_lights??0)),flames:count,invuln_ticks:count,dash_cd_ticks:count,pulse_cd_ticks:count,charm_ticks:count},'player');
   for (const [key,items] of [['shades',s.shades??[]],['lanterns',s.lanterns??[]],['drifters',s.drifters??[]],['charms',s.charms??[]]]) {
     const ids=new Set();
     for (const item of items) {
-      fields(item,{pos,id:x=>typeof x==='string'&&x.length>0,lit:bool,
-        state:x=>(key==='shades'?['spawning','wander','chase','recoil','stunned']:['idle','chase','flee','removed']).includes(x),
+      fields(item,{pos,id:x=>typeof x==='string'&&x.length>0,lit:bool,ever_lit:bool,fuel:x=>Number.isFinite(x)&&x>=0&&x<=t.fuel_max,target_lantern_id:x=>typeof x==='string',
+        state:x=>(key==='shades'?['spawning','wander','chase','recoil','stunned','drain']:['idle','chase','flee','removed']).includes(x),
         state_ticks_left:count,stolen:count,available:bool,respawn_ticks:count,deposited:x=>count(x)&&x<=t.lantern_cost},key);
       if (key==='lanterns') requireValid(new RegExp('^L[1-'+(night+4)+']$').test(item.id),key+'.id');
       else if (key!=='charms') requireValid(pos(item.pos),key+'.pos');

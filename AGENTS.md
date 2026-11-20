@@ -6,3 +6,6 @@ Chạy node --test trước khi gắn tag. Lưu log thật, ghi rõ test chưa c
 Phase 2 dùng Contract v1.1. Đọc docs/phase-2.md trước khi đổi mô phỏng.
 Giữ thứ tự xử lý trong game.step và dùng sim_tick cho gameplay. Tick ngoài vẫn tăng khi CLI tạm dừng.
 Tọa độ chuẩn đặt trong world.mjs. Chạy node --test và smoke cả ba giá trị --night trước khi phát hành.
+
+Phase 3 dùng Contract v1.2. Xem docs/phase-3.md và CHANGELOG.md.
+Xử lý hao dầu và hút dầu trước tương tác, kiểm kết quả bình minh cuối tick. Không làm tròn dầu nội bộ.

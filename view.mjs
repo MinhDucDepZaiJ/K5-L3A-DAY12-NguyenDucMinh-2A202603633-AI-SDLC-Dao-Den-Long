@@ -25,6 +25,16 @@ for(const control of [volume,sensitivity]){
   try {control.value=localStorage.getItem(control.id)??control.value;} catch {}
   control.addEventListener('input',()=>{try{localStorage.setItem(control.id,control.value);}catch{}});
 }
+const palette=document.getElementById('accessible-palette');
+try {palette.checked=localStorage.getItem(palette.id)==='true';} catch {}
+function updatePalette(){
+  document.body.classList.toggle('accessible-palette',palette.checked);
+}
+palette.addEventListener('change',()=>{
+  updatePalette();
+  try {localStorage.setItem(palette.id,String(palette.checked));} catch {}
+});
+updatePalette();
 let audio;
 function sound(frequency,duration=.16,gain=.13){
   if(!audio||!Number(volume.value)) return;
@@ -100,13 +110,13 @@ function showDialog(title,detail,action,onAction,extras=[]){
 }
 function menu(){
   screen='menu';
-  showDialog('Đảo Đèn Lồng','Thu đom đóm và thắp sáng từng hòn đảo.','Bắt đầu',()=>{
+  showDialog('Đảo Đèn Lồng','Thu đom đóm, châm dầu và giữ đảo sáng đến bình minh.','Bắt đầu',()=>{
     night=1;total=0;intro();
   },[['Cài đặt',()=>showSettings('menu')]]);
 }
 function intro(){
   screen='intro';
-  const lore=['Gom ánh sáng trước khi bình minh đến.','Qua cầu tre hoặc dùng bục nhảy để sang đảo bên.','Theo dốc lên tầng cao và chú ý gió mạnh.'];
+  const lore=['Giữ ít nhất ba đèn sáng đến bình minh.','Qua cầu tre hoặc dùng bục nhảy để sang đảo bên.','Theo dốc lên tầng cao và chú ý gió mạnh.'];
   showDialog(`Đêm ${night} · ${worlds[night].name}`,`Ông Đăng: ${lore[night-1]}`,'Vào đảo',reset);
 }
 function showSettings(from){
@@ -255,10 +265,24 @@ function draw(now){
       glow(x,b,s*.95,'#ffe58a');
       disk(x,b,s*.125,'#fff6c2');
     } else if (e.kind==='lantern'){
-      if (e.lit) glow(x,y-1.7*s,4*s,'#ffb24e8a');
+      const low=e.lit&&e.fuel<tuning.low_fuel_threshold;
+      const dim=low&&now%1000>=500;
+      if(e.lit&&!dim) glow(x,y-1.7*s,4*s,'#ffb24e8a');
       ctx.fillStyle='#78614d';ctx.fillRect(x-.10*s,y-2.1*s,.20*s,2.1*s);
-      disk(x,y-2.1*s,.61*s,e.lit?'#ffb347':'#5b5f6e');
-      if(e.lit) disk(x,y-2.1*s,.26*s,'#ffe9b0');
+      ctx.beginPath();ctx.ellipse(x,y-2.1*s,.61*s,(e.lit?.61:.488)*s,0,0,Math.PI*2);
+      ctx.fillStyle=e.lit?(dim?'#bd7944':'#ffb347'):'#5b5f6e';ctx.fill();
+      if(e.lit&&!dim) disk(x,y-2.1*s,.26*s,'#ffe9b0');
+      if(!e.lit){
+        ctx.beginPath();ctx.moveTo(x-.19*s,y-2.48*s);ctx.lineTo(x+.06*s,y-2.18*s);
+        ctx.lineTo(x-.07*s,y-2.11*s);ctx.lineTo(x+.16*s,y-1.83*s);
+        ctx.strokeStyle='#202337';ctx.lineWidth=Math.max(1,.05*s);ctx.stroke();
+      }else{
+        const bar=Math.max(16,1.3*s),top=y-2.88*s;
+        ctx.fillStyle='#131728';ctx.fillRect(x-bar/2,top,bar,4);
+        ctx.fillStyle=low?(palette.checked?'#ffffff':dim?'#a64350':'#ff5a5f'):'#f2c14e';
+        ctx.fillRect(x-bar/2,top,bar*e.fuel/tuning.fuel_max,4);
+        if(low&&palette.checked){ctx.font='12px system-ui';ctx.fillText('⚠',x+bar/2+3,top+3);}
+      }
       ctx.fillStyle='#fff0cb';ctx.font='12px system-ui';ctx.fillText(e.id,x+8,y-2.5*s);
     } else if(e.kind==='drifter'){
       ctx.fillStyle='#8fa3b8';ctx.fillRect(x-.7*s,y-.15*s,1.4*s,.3*s);
@@ -266,8 +290,10 @@ function draw(now){
       ctx.fillStyle='#f2c14e';ctx.fillRect(x-.21*s,y-.65*s,.42*s,.58*s);
       ctx.fillStyle='#c8102e';ctx.fillRect(x-.16*s,y-.60*s,.32*s,.48*s);
     } else if (e.kind==='shade'){
+      const outline=palette.checked?'#00b3ff':'#7a3cff';
+      disk(x,y-.35*s,s*.74,outline);
       disk(x,y-.35*s,s*.70,e.state==='stunned'?'#3a3450':'#120a1a');
-      disk(x-.19*s,y-.49*s,s*.09,'#7a3cff');disk(x+.19*s,y-.49*s,s*.09,'#7a3cff');
+      disk(x-.19*s,y-.49*s,s*.09,outline);disk(x+.19*s,y-.49*s,s*.09,outline);
     } else {
       const moving=Math.hypot(view.player.vel[0],view.player.vel[2])>.05;
       const stride=moving&&view.player.grounded?Math.sin(now/75)*.13:0;
@@ -332,20 +358,26 @@ function updateHud(){
   const lit=view.lanterns.filter(l=>l.lit).length;
   const seconds=Math.ceil(view.time_left_s);
   const values={lanterns:`${lit}/${view.lanterns.length}`,flames:String(view.player.flames),
-    motes:`${view.player.carried}/${tuning.carry_capacity}`,
+    motes:`${view.player.carried}/${view.player.capacity}`,
     time:`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`,score:String(view.score)};
   for (const [id,value] of Object.entries(values)){
     if (hud[id].textContent!==value) hud[id].textContent=value;
   }
   hud.time.classList.toggle('urgent',seconds<=30);
-  for(const [i,slot] of [...slots.children].entries()) slot.classList.toggle('filled',i<view.player.carried);
+  for(const [i,slot] of [...slots.children].entries()){
+    slot.hidden=i>=view.player.capacity;
+    slot.classList.toggle('filled',i<view.player.carried);
+  }
   cooldowns.textContent=`Shift · Lướt ${view.player.dash_cd_s?view.player.dash_cd_s.toFixed(1)+'s':'sẵn sàng'} | F · Tỏa sáng ${view.player.pulse_cd_s?view.player.pulse_cd_s.toFixed(1)+'s':'sẵn sàng'}`;
   document.body.classList.toggle('game-paused',paused);
   hud.progress.max=view.lanterns.length;
+  document.getElementById('goal').textContent=Math.ceil(tuning.win_ratio*view.lanterns.length);
   hud.progress.value=lit;
-  const near=view.lanterns.find(l=>!l.lit && Math.hypot(l.pos[0]-view.player.pos[0],l.pos[2]-view.player.pos[2])<=tuning.interact_radius);
+  const near=view.lanterns.map(l=>({l,d:Math.hypot(l.pos[0]-view.player.pos[0],l.pos[2]-view.player.pos[2])}))
+    .filter(({l,d})=>(!l.lit||l.fuel<tuning.fuel_max)&&d<=tuning.interact_radius)
+    .sort((a,b)=>a.d-b.d||a.l.id.localeCompare(b.l.id))[0]?.l;
   const hint=near && !paused && game.state==='playing'
-    ? (view.player.carried ? `E · Nạp ánh sáng (${near.deposited}/${tuning.lantern_cost})` : 'Nhặt đom đóm để nạp đèn')
+    ? (view.player.carried ? (near.lit?`E · Châm dầu (${near.fuel.toFixed(1)}/100)`:`E · Nạp ánh sáng (${near.deposited}/${near.ever_lit?tuning.relight_cost:tuning.lantern_cost})`) : 'Nhặt đom đóm để nạp đèn')
     : (night===3&&view.sim_tick%1800>=1680?'Gió mạnh sắp đến':view.wind.active?'Gió mạnh':'');
   if (status.textContent!==hint) status.textContent=hint;
 }

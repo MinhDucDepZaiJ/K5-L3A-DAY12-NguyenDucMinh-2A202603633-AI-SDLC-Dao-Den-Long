@@ -23,9 +23,16 @@ export function createGame(t,seed,s={},night=1){
   let pulseReady=s.player?.pulse_cd_ticks??0,charmUntil=s.player?.charm_ticks??0;
   const duration=s.time_left_s??t[`night${night}_duration_s`];
   const time=()=>Math.max(0,duration-sim/60);
+  const maxFuel=t.fuel_max*60, lowFuel=t.low_fuel_threshold*60;
+  let lights=p.successful_lights??0;
+  const capacity=()=>Math.min(t.capacity_max,t.carry_capacity+2*lights);
+  const fuelValue=l=>Math.round(l.fuelUnits/6)/10;
+  const nearest=(list,pos)=>list.sort((a,b)=>dist(a.pos,pos)-dist(b.pos,pos)||idOrder(a,b))[0];
   const lanterns=world.lamps.map((pos,i)=>{
     const id='L'+(i+1),patch=s.lanterns?.find(l=>l.id===id);
-    return {id,pos,lit:false,deposited:0,...patch};
+    const lamp={id,pos,lit:false,deposited:0,...patch};
+    const fuelUnits=lamp.lit?Math.round((patch?.fuel??t.fuel_max)*60):0;
+    return {...lamp,fuelUnits,ever_lit:lamp.lit||Boolean(patch?.ever_lit),relit_count:0};
   });
   let moteId=0,shadeId=0,drifterId=0;
   const motes=[];
@@ -37,22 +44,22 @@ export function createGame(t,seed,s={},night=1){
   if(s.motes) for(const pos of s.motes) addMote(pos);
   else if(s.random_motes!==false) for(let i=0;i<20;i++) spawnMote();
   const shades=(s.shades??[]).map((q,i)=>({id:q.id??'S'+(i+1),pos:q.pos,state:q.state??'chase',
-    until:q.state_ticks_left??0,pushUntil:0,dir:[1,0],recoilUntil:q.state_ticks_left??0,recoilDir:[1,0]})).sort(idOrder);
+    until:q.state_ticks_left??0,pushUntil:0,target:q.target_lantern_id,drainTicks:0,dir:[1,0],recoilUntil:q.state_ticks_left??0,recoilDir:[1,0]})).sort(idOrder);
   const drifters=(s.drifters??[]).map((q,i)=>({id:q.id??'D'+(i+1),pos:q.pos,state:q.state??'idle',
     stolen:q.stolen??0,until:q.state_ticks_left??(q.state==='flee'?240:0),dir:away(q.pos,p.pos)})).sort(idOrder);
   const charms=(s.charms??(world.charms??[]).map(pos=>({pos}))).map((q,i)=>({id:q.id??'C'+(i+1),
     pos:q.pos??world.charms?.[i]??[0,0,0],until:q.available===false?(q.respawn_ticks??2700):0}));
   const wind={active:false,dir_deg:0};
-  const safeAt=pos=>lanterns.find(l=>l.lit&&dist(l.pos,pos)<=t.safe_radius);
+  const safeAt=pos=>lanterns.find(l=>l.lit&&l.fuelUnits>=lowFuel&&dist(l.pos,pos)<=t.safe_radius);
   const nextId=(prefix,list,next)=>{let id;do{id=prefix+next();}while(list.some(q=>q.id===id));return id;};
   const onGround=(pos)=>surfaces(night,pos[0],pos[2]).some(h=>Math.abs(h-pos[1])<.01);
 
   function snapshot(){
     return {type:'snapshot',tick,sim_tick:sim,night,state,time_left_s:time(),score,wind:{...wind},
-      player:{pos:round(p.pos),flames:p.flames,carried:p.carried,vel:round(vel),grounded,
+      player:{pos:round(p.pos),flames:p.flames,carried:p.carried,capacity:capacity(),vel:round(vel),grounded,
         invuln:sim<invuln,dash_cd_s:sim<charmUntil?0:expired(dashReady,sim)/60,
         pulse_cd_s:expired(pulseReady,sim)/60,charm_s:expired(charmUntil,sim)/60},
-      lanterns:lanterns.map(l=>({...l,pos:round(l.pos)})),
+      lanterns:lanterns.map(({fuelUnits,...l})=>({...l,pos:round(l.pos),fuel:fuelValue({fuelUnits})})),
       shades:shades.map(q=>({id:q.id,pos:round(q.pos),state:q.state})),
       motes_active:motes.length,motes:motes.map(m=>({id:m.id,pos:round(m.pos),kind:m.kind,
         ttl_s:m.until===null?null:expired(m.until,sim)/60})),
@@ -116,7 +123,7 @@ export function createGame(t,seed,s={},night=1){
   }
 
   function collect(emit){
-    for(let i=0;i<motes.length&&p.carried<t.carry_capacity;){
+    for(let i=0;i<motes.length&&p.carried<capacity();){
       const m=motes[i];
       if(dist(p.pos,m.pos)>1||!raised(p.pos,m.pos)){i++;continue;}
       motes.splice(i,1);
@@ -130,16 +137,45 @@ export function createGame(t,seed,s={},night=1){
     }
   }
 
+  function updateFuel(emit){
+    for(const lamp of lanterns){
+      if(!lamp.lit) continue;
+      lamp.fuelUnits-=t.fuel_decay_per_s;
+      const draining=shades.filter(q=>q.state==='drain'&&q.target===lamp.id);
+      for(const q of draining){
+        lamp.fuelUnits-=t.drain_per_s;
+        q.drainTicks=(q.drainTicks??0)+1;
+      }
+      lamp.fuelUnits=Math.max(0,lamp.fuelUnits);
+      for(const q of draining){
+        if(q.drainTicks%60===0) emit('fuel_drain',{lantern_id:lamp.id,shade_id:q.id,fuel:fuelValue(lamp)});
+      }
+      if(lamp.fuelUnits===0){
+        lamp.lit=false;lamp.deposited=0;
+        emit('lantern_out',{lantern_id:lamp.id});
+      }
+    }
+  }
+
   function interact(emit){
-    const target=lanterns.filter(l=>!l.lit&&dist(p.pos,l.pos)<=2)
-      .sort((a,b)=>dist(a.pos,p.pos)-dist(b.pos,p.pos)||idOrder(a,b))[0];
+    const target=nearest(lanterns.filter(l=>(!l.lit||l.fuelUnits<maxFuel)&&dist(p.pos,l.pos)<=t.interact_radius),p.pos);
     if(!target||!p.carried) return;
-    const amount=Math.min(p.carried,10-target.deposited);
-    target.deposited+=amount;p.carried-=amount;score+=10*amount;
+    if(target.lit){
+      const amount=Math.min(p.carried,Math.ceil((maxFuel-target.fuelUnits)/(60*t.fuel_per_mote)));
+      target.fuelUnits=Math.min(maxFuel,target.fuelUnits+amount*t.fuel_per_mote*60);
+      p.carried-=amount;score+=t.score.per_mote*amount;
+      emit('refuel',{lantern_id:target.id,amount,fuel:fuelValue(target)});
+      return;
+    }
+    const relight=target.ever_lit,cost=relight?t.relight_cost:t.lantern_cost;
+    const amount=Math.min(p.carried,Math.max(0,cost-target.deposited));
+    target.deposited+=amount;p.carried-=amount;score+=t.score.per_mote*amount;
     if(amount) emit('deposit',{lantern_id:target.id,amount,deposited:target.deposited});
-    if(target.deposited===10){
-      target.lit=true;score+=100;
-      emit('lantern_lit',{lantern_id:target.id});
+    if(target.deposited>=cost){
+      target.lit=true;target.ever_lit=true;target.fuelUnits=maxFuel;lights++;
+      if(relight) target.relit_count++;
+      score+=relight?t.score.per_relight:t.score.per_lantern;
+      emit('lantern_lit',{lantern_id:target.id,relight});
     }
   }
 
@@ -148,8 +184,9 @@ export function createGame(t,seed,s={},night=1){
     const center=[p.pos[0],p.pos[1]+.8,p.pos[2]],stunned_ids=[];
     for(const q of shades){
       if(q.state==='spawning'||distance3(center,q.pos)>5) continue;
+      score+=q.state==='drain'?t.score.per_stun_drain:t.score.per_stun;
       q.state='stunned';q.until=sim+120;q.pushUntil=sim+15;q.dir=away(q.pos,p.pos);
-      stunned_ids.push(q.id);score+=5;
+      stunned_ids.push(q.id);
     }
     emit('pulse',{stunned_ids});
     for(const d of drifters){
@@ -167,13 +204,15 @@ export function createGame(t,seed,s={},night=1){
 
   function moveShade(q){
     if(q.state==='spawning'&&sim<q.until) return;
-    if(q.state==='stunned'&&sim<q.until){
-      if(sim<q.pushUntil){
-        const next=[q.pos[0]+q.dir[0]*4/15,q.pos[1],q.pos[2]+q.dir[1]*4/15];
-        if(!safeAt(next)&&surfaces(night,next[0],next[2]).includes(0)) q.pos=next;
-        else q.pushUntil=sim;
+    if(q.state==='drain'){
+      const target=lanterns.find(l=>l.id===q.target);
+      if(dist(p.pos,q.pos)<=6) q.state='chase';
+      else if(!target?.lit||target.fuelUnits>=lowFuel||dist(q.pos,target.pos)>2){
+        q.state='wander';q.drainTicks=0;
+        if(!safeAt(q.pos)) return;
       }
-      return;
+      else return;
+      q.drainTicks=0;
     }
     const safe=safeAt(q.pos);
     if(safe){
@@ -182,15 +221,30 @@ export function createGame(t,seed,s={},night=1){
       q.pos=[safe.pos[0]+dx*r,q.pos[1],safe.pos[2]+dz*r];
       return;
     }
+    if(q.state==='stunned'&&sim<q.until){
+      if(sim<q.pushUntil){
+        const next=[q.pos[0]+q.dir[0]*4/15,q.pos[1],q.pos[2]+q.dir[1]*4/15];
+        if(!safeAt(next)&&surfaces(night,next[0],next[2]).includes(0)) q.pos=next;
+        else q.pushUntil=sim;
+      }
+      return;
+    }
+    if(q.state==='stunned'){q.state='wander';return;}
     let direction,speed;
     if(q.state==='recoil'&&sim<q.recoilUntil){
       direction=q.recoilDir;speed=2;
     }else{
       const d=dist(q.pos,p.pos);
-      q.state=d<=(q.state==='chase'?18:12)?'chase':'wander';
+      const weak=q.state!=='chase'&&nearest(lanterns.filter(l=>l.lit&&l.fuelUnits<lowFuel),q.pos);
+      q.state=!weak&&d<=(q.state==='chase'?18:12)?'chase':'wander';
       speed=night===3?4.5:t.shade_speed;
-      direction=q.state==='chase'?away(p.pos,q.pos):[Math.cos(sim/180),Math.sin(sim/180)];
-      if(q.state==='chase') speed=Math.min(speed,d*60);
+      const target=q.state==='chase'?{pos:p.pos}:weak||nearest(lanterns.filter(l=>!l.lit),q.pos);
+      direction=target?away(target.pos,q.pos):[Math.cos(sim/180),Math.sin(sim/180)];
+      if(target) speed=Math.min(speed,dist(target.pos,q.pos)*60);
+      if(weak&&dist(q.pos,weak.pos)<=2){
+        q.state='drain';q.target=weak.id;q.drainTicks=0;
+        return;
+      }
     }
     const next=[q.pos[0]+direction[0]*speed/60,q.pos[1],q.pos[2]+direction[1]*speed/60];
     const lantern=safeAt(next);
@@ -269,6 +323,7 @@ export function createGame(t,seed,s={},night=1){
     }
     if(state==='paused'){previous={...input};return events;}
     sim++;
+    updateFuel(emit);
     if(night===3&&s.wind_enabled!==false){
       if(sim%1800===1680) wind.dir_deg=Math.floor(random()*360);
       wind.active=sim>=1800&&sim%1800<300;
@@ -288,10 +343,13 @@ export function createGame(t,seed,s={},night=1){
     for(const q of shades) moveShade(q);
     if(!respawn) contacts(emit);
     spawn(emit);
-    const reason=p.flames===0?'no_flames':lanterns.every(l=>l.lit)?'all_lit':time()===0?'dawn':null;
+    const lit=lanterns.filter(l=>l.lit);
+    const enough=lit.length>=Math.ceil(t.win_ratio*lanterns.length);
+    const reason=p.flames===0?'no_flames':time()===0?(enough?'dawn_survived':'dawn'):null;
     if(reason){
-      state=reason==='all_lit'?'won':'lost';
-      if(state==='won') score+=Math.floor(time())*2+p.flames*50;
+      state=reason==='dawn_survived'?'won':'lost';
+      if(state==='won') score+=lit.reduce((sum,l)=>sum+t.score.per_dawn_lantern+Math.floor(l.fuelUnits/60),0)
+        +p.flames*t.score.per_flame_left;
       emit('game_over',{result:state,reason});
     }
     previous={...input};

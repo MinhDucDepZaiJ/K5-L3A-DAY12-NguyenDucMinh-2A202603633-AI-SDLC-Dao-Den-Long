@@ -26,16 +26,16 @@ test('tick 0, yaw, movement normalization, held frame fields and jump',t=>{
   assert.deepEqual(rows[0].player.pos,[0,0,0]);
   assert.ok(rows.find(r=>r.type==='snapshot'&&r.tick===1).player.pos[1]>0);
   assert.deepEqual(rows.at(-2).player.pos,[4.243,0,-4.243]);
-  assert.equal(rows.at(-2).time_left_s,299);
+  assert.equal(rows.at(-2).time_left_s,239);
   assert.equal(rows.at(-2).sim_tick,60);
 });
 test('pickup, partial deposit, held interact, relight and win',t=>{
   const lanterns=[{id:'L1',pos:[0,0,0],deposited:7},...['L2','L3','L4','L5'].map(id=>({id,lit:true}))];
-  const rows=run(t,{scenario:{...baseline,lanterns,motes:[[0,0,0],[0,0,0],[0,0,0]]},frames:[{tick:0,interact:true}]});
+  const rows=run(t,{scenario:{...baseline,lanterns,time_left_s:1/60,motes:[[0,0,0],[0,0,0],[0,0,0]]},frames:[{tick:0,interact:true}]});
   assert.deepEqual(events(rows,'mote_picked').map(e=>e.data.carried),[1,2,3]);
   assert.deepEqual(events(rows,'deposit')[0].data,{lantern_id:'L1',amount:3,deposited:10});
   assert.equal(events(rows,'lantern_lit').length,1);
-  assert.deepEqual(rows.at(-1),{type:'end',ticks:1,state:'won',score:878});
+  assert.deepEqual(rows.at(-1),{type:'end',ticks:1,state:'won',score:1011});
   const more=run(t,{scenario:{...baseline,lanterns:[{id:'L1',pos:[0,0,0]}],motes:[[0,0,0],[3,0,0]]},
     frames:[{tick:0,interact:true,move:[1,0]},{tick:30,move:[0,0]}],ticks:35});
   assert.equal(events(more,'deposit').length,1);
@@ -114,4 +114,46 @@ test('zero flames wins the precedence check over lit lanterns and dawn',t=>{
   const lanterns=Array.from({length:5},(_,i)=>({id:'L'+(i+1),lit:true}));
   const rows=run(t,{scenario:{...baseline,lanterns,player:{flames:0},time_left_s:0}});
   assert.equal(events(rows,'game_over')[0].data.reason,'no_flames');
+});
+
+test('all lit does not end the night before dawn',t=>{
+  const lanterns=Array.from({length:5},(_,i)=>({id:'L'+(i+1),lit:true}));
+  const rows=run(t,{scenario:{...baseline,lanterns},ticks:1});
+  assert.equal(rows.at(-1).state,'playing');
+  assert.equal(rows.at(-2).player.capacity,10);
+});
+test('refuel, extinguish, relight and expand capacity',t=>{
+  const fuel=run(t,{scenario:{...baseline,player:{carried:3},
+    lanterns:[{id:'L1',pos:[0,0,0],lit:true,fuel:76}]},frames:[{tick:0,interact:true}],ticks:1});
+  assert.deepEqual(events(fuel,'refuel')[0].data,{lantern_id:'L1',amount:3,fuel:100});
+  assert.equal(fuel.at(-1).score,15);
+  const relight=run(t,{scenario:{...baseline,player:{carried:5,successful_lights:4},
+    lanterns:[{id:'L1',pos:[0,0,0],lit:true,fuel:1/60}]},frames:[{tick:0,interact:true}],ticks:1});
+  assert.equal(events(relight,'lantern_out').length,1);
+  assert.deepEqual(events(relight,'lantern_lit')[0].data,{lantern_id:'L1',relight:true});
+  assert.equal(relight.at(-2).lanterns[0].relit_count,1);
+  assert.equal(relight.at(-2).player.capacity,20);
+  assert.equal(relight.at(-1).score,65);
+});
+test('draining stacks with passive decay and reports every 60 continuous ticks',t=>{
+  const rows=run(t,{scenario:{...baseline,lanterns:[{id:'L1',pos:[20,0,0],lit:true,fuel:25}],
+    shades:[{pos:[20,.8,0],state:'drain',target_lantern_id:'L1'},
+      {pos:[21,.8,0],state:'drain',target_lantern_id:'L1'}]},ticks:61});
+  assert.deepEqual(events(rows,'fuel_drain').map(e=>[e.tick,e.data.shade_id,e.data.fuel]),[[60,'S1',14],[60,'S2',14]]);
+});
+test('pulse stopping a drain earns 15 points',t=>{
+  const rows=run(t,{scenario:{...baseline,player:{carried:3},lanterns:[{id:'L1',pos:[4,0,0],lit:true,fuel:20}],
+    shades:[{pos:[4,.8,0],state:'drain',target_lantern_id:'L1'}]},frames:[{tick:0,pulse:true}],ticks:1});
+  assert.equal(rows.at(-1).score,15);
+  assert.equal(rows.at(-2).shades[0].state,'stunned');
+});
+test('dawn threshold uses only lit lanterns after final fuel update',t=>{
+  const lamp=(i,fuel)=>({id:'L'+i,lit:true,fuel});
+  const scenario={...baseline,time_left_s:1/60,lanterns:[lamp(1,60),lamp(2,60),lamp(3,1/60)]};
+  const lost=run(t,{scenario,ticks:2});
+  assert.equal(events(lost,'game_over')[0].data.reason,'dawn');
+  scenario.lanterns[2].fuel=30;
+  const won=run(t,{scenario,ticks:2});
+  assert.equal(events(won,'game_over')[0].data.reason,'dawn_survived');
+  assert.equal(won.at(-1).score,447);
 });
