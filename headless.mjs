@@ -15,20 +15,21 @@ function fields(value, checks, label) {
     if (Object.hasOwn(value,key)) requireValid(check(value[key]),label+'.'+key);
   }
 }
-function validateScenario(s,t) {
+function validateScenario(s,t,night) {
   const bool = x=>typeof x==='boolean';
   const pos = x=>vector(x,3);
-  fields(s,{time_left_s:x=>Number.isFinite(x)&&x>=0,random_motes:bool,random_shades:bool,
+  fields(s,{time_left_s:x=>Number.isFinite(x)&&x>=0,random_motes:bool,random_shades:bool,random_drifters:bool,wind_enabled:bool,drifters:Array.isArray,charms:Array.isArray,
     player:x=>object(x),motes:x=>Array.isArray(x)&&x.every(pos),
     shades:Array.isArray,lanterns:Array.isArray},'scenario');
-  if (s.player) fields(s.player,{pos,carried:x=>count(x)&&x<=t.carry_capacity,flames:count},'player');
-  for (const [key,items] of [['shades',s.shades??[]],['lanterns',s.lanterns??[]]]) {
+  if (s.player) fields(s.player,{pos,carried:x=>count(x)&&x<=t.carry_capacity,flames:count,invuln_ticks:count,dash_cd_ticks:count,pulse_cd_ticks:count,charm_ticks:count},'player');
+  for (const [key,items] of [['shades',s.shades??[]],['lanterns',s.lanterns??[]],['drifters',s.drifters??[]],['charms',s.charms??[]]]) {
     const ids=new Set();
     for (const item of items) {
       fields(item,{pos,id:x=>typeof x==='string'&&x.length>0,lit:bool,
-        deposited:x=>count(x)&&x<=t.lantern_cost},key);
-      if (key==='lanterns') requireValid(/^L[1-5]$/.test(item.id),key+'.id');
-      else requireValid(pos(item.pos),key+'.pos');
+        state:x=>(key==='shades'?['spawning','wander','chase','recoil','stunned']:['idle','chase','flee','removed']).includes(x),
+        state_ticks_left:count,stolen:count,available:bool,respawn_ticks:count,deposited:x=>count(x)&&x<=t.lantern_cost},key);
+      if (key==='lanterns') requireValid(new RegExp('^L[1-'+(night+4)+']$').test(item.id),key+'.id');
+      else if (key!=='charms') requireValid(pos(item.pos),key+'.pos');
       if (item.id!==undefined) {
         requireValid(!ids.has(item.id),key+'.id trùng');
         ids.add(item.id);
@@ -42,7 +43,7 @@ function inputFrames(data) {
   for (const f of data.frames) {
     fields(f,{move:x=>vector(x,2)&&x.every(n=>Math.abs(n)<=1),
       cam_yaw_deg:Number.isFinite,jump:x=>typeof x==='boolean',
-      interact:x=>typeof x==='boolean',pulse:x=>typeof x==='boolean'},'frame');
+      interact:x=>typeof x==='boolean',pulse:x=>typeof x==='boolean',dash:x=>typeof x==='boolean',pause:x=>typeof x==='boolean'},'frame');
     requireValid(count(f.tick)&&f.tick>last,'frame.tick');
     last=f.tick;
   }
@@ -52,18 +53,18 @@ try {
   const {values:a}=parseArgs({options:Object.fromEntries(
     ['seed','night','scenario','inputs','ticks','out','snapshot-every'].map(k=>[k,{type:'string'}]))});
   const integer = s=>typeof s==='string' && /^-?\d+$/.test(s) && Number.isSafeInteger(Number(s));
-  requireValid(integer(a.seed)&&a.night==='1'&&integer(a.ticks)&&count(Number(a.ticks))&&a.out,'tham số CLI');
+  requireValid(integer(a.seed)&&['1','2','3'].includes(a.night)&&integer(a.ticks)&&count(Number(a.ticks))&&a.out,'tham số CLI');
   const interval=a['snapshot-every']??'10';
   requireValid(integer(interval)&&Number(interval)>0,'snapshot-every');
   const {tuning}=JSON.parse(readFileSync(new URL('./game.contract.json',import.meta.url),'utf8'));
   const scenario=a.scenario?read(a.scenario):{};
-  validateScenario(scenario,tuning);
+  validateScenario(scenario,tuning,Number(a.night));
   const frames=a.inputs?inputFrames(read(a.inputs)):[];
-  const game=createGame(tuning,Number(a.seed),scenario);
+  const game=createGame(tuning,Number(a.seed),scenario,Number(a.night));
   const lines=[game.snapshot()];
   const input=initialInput();
   let cursor=0;
-  for (let k=0;k<Number(a.ticks)&&game.state==='playing';k++) {
+  for (let k=0;k<Number(a.ticks)&&['playing','paused'].includes(game.state);k++) {
     if (frames[cursor]?.tick===k) Object.assign(input,frames[cursor++]);
     lines.push(...game.step(input));
     if (game.tick%Number(interval)===0) lines.push(game.snapshot());

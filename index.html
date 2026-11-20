@@ -19,7 +19,7 @@ dl div{background:#25263b;border-radius:8px;padding:6px;min-width:0}
 dt{color:var(--muted);font-size:.7rem}
 dd{margin:2px 0 0;font-weight:700;font-variant-numeric:tabular-nums}
 .goal{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:10px;font-size:.8rem}
-progress{width:44%;height:8px;accent-color:var(--gold)}
+progress{width:42px;height:8px;accent-color:var(--gold)}
 button{font:inherit;font-weight:700;cursor:pointer;border:1px solid transparent;border-radius:9px;padding:9px 12px;background:var(--gold);color:#241b2f}
 button:focus-visible,summary:focus-visible{outline:3px solid #fff4df;outline-offset:3px}
 button.secondary{background:#292942;border-color:var(--line);color:#fff4df}
@@ -34,19 +34,39 @@ dialog{width:min(410px,calc(100% - 32px));color:#fff4df;text-align:center;paddin
 dialog::backdrop{background:#090a18aa}
 dialog p{margin:10px 0 18px;color:var(--muted)}
 @media(max-width:560px){dl{grid-template-columns:repeat(2,1fr)}footer{bottom:8px}#status{top:50%;bottom:auto}}
+
+:root{--line:#f2c14e;--gold:#f2c14e}body,dialog{color:#f5f1e6}
+#clock{position:fixed;top:16px;left:50%;translate:-50%;padding:8px 13px;font-weight:700;font-variant-numeric:tabular-nums}
+#results{min-width:136px;position:fixed;top:66px;right:16px;padding:8px 12px;color:#f2c14e}
+#slots{position:fixed;bottom:18px;left:50%;translate:-50%;display:flex;gap:4px;padding:7px;pointer-events:none}
+#slots span{width:12px;height:16px;border:1px solid #c9b48a;border-radius:3px}
+#slots .filled{background:#ffe58a}
+#cooldowns{position:fixed;right:16px;bottom:16px;font-size:.78rem;padding:8px;pointer-events:none}
+#arrow{position:fixed;top:42%;left:50%;font-size:1.5rem;color:#f2c14e;pointer-events:none}
+#dialog-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}
+#settings label{display:block;margin-bottom:8px}
+.urgent{color:#ff5a5f;animation:warning 1s ease-in-out infinite alternate}
+@keyframes warning{to{opacity:.6}}
+.game-paused .urgent{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){.urgent{animation:none}}
+@media(max-width:900px){#slots{bottom:112px}#cooldowns{bottom:145px}}
+@media(max-width:560px){header{width:185px;min-width:0}#results{top:62px}#clock{top:130px}}
 </style>
 <canvas aria-label="Sân chơi Đêm 1"></canvas>
 <header class="panel" aria-label="Tiến độ màn chơi">
   <p class="location">Đêm 1 · Đảo Bến</p>
   <h1>Đảo Đèn Lồng</h1>
-  <div class="goal"><span>Thắp đèn <strong id="lanterns">0/5</strong></span><progress id="progress" value="0" max="5" aria-label="Số đèn đã thắp"></progress></div>
   <dl>
     <div><dt>Lửa</dt><dd id="flames">—</dd></div>
     <div><dt>Đom đóm</dt><dd id="motes">—</dd></div>
-    <div><dt>Còn lại</dt><dd id="time">—</dd></div>
-    <div><dt>Điểm</dt><dd id="score">—</dd></div>
+
   </dl>
 </header>
+<div id="clock" class="panel"><span id="time">—</span></div>
+<div id="results" class="panel">Điểm <strong id="score">—</strong><div class="goal"><span>Thắp đèn <strong id="lanterns">0/5</strong></span><progress id="progress" value="0" max="5" aria-label="Số đèn đã thắp"></progress></div></div>
+<div id="slots" class="panel" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+<div id="cooldowns" class="panel"></div>
+<div id="arrow" hidden aria-label="Hướng đến đèn chưa thắp">▲</div>
 <button id="pause" type="button" aria-keyshortcuts="Escape">⏸ Tạm dừng</button>
 <p id="status" role="status"></p>
 <footer class="panel">
@@ -58,14 +78,19 @@ dialog p{margin:10px 0 18px;color:var(--muted)}
       <span><kbd>Space</kbd> Nhảy</span>
       <span><kbd>E</kbd> Nạp đèn</span>
       <span><kbd>F</kbd> Tỏa sáng</span>
-      <span><kbd>Esc</kbd> Tạm dừng</span>
+      <span><kbd>Shift</kbd> Lướt</span><span><kbd>Esc</kbd> / <kbd>P</kbd> Tạm dừng</span>
     </div>
   </details>
 </footer>
 <dialog aria-labelledby="dialog-title">
   <h2 id="dialog-title"></h2>
   <p id="dialog-detail"></p>
+  <div id="settings" hidden>
+    <label>Âm lượng <input id="volume" type="range" min="0" max="1" step=".05" value=".4"></label>
+    <label>Độ nhạy chuột <input id="sensitivity" type="range" min=".25" max="2" step=".05" value="1"></label>
+  </div>
   <button id="dialog-action" type="button" autofocus></button>
+  <div id="dialog-actions"></div>
 </dialog>
 <script type="module" src="./view.mjs"></script>
 </html>

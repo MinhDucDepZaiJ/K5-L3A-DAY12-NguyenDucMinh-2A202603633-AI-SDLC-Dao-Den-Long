@@ -1,0 +1,19 @@
+✔ tick 0, yaw, movement normalization, held frame fields and jump (164.824122ms)
+✔ pickup, partial deposit, held interact, relight and win (563.63236ms)
+✔ pulse consumes light once, pushes shade and reports stun (244.852007ms)
+✔ invulnerability, flame loss, safe lantern and dawn (511.2664ms)
+✔ malformed input and scenario exit 2 (564.472484ms)
+✔ pause separates tick and sim_tick without advancing dash cooldown (277.898243ms)
+✔ fall costs one flame, loses carried motes and respawns after 60 ticks (206.86379ms)
+✔ Night 2 pad launches toward other island and charm allows repeated dashes (214.763369ms)
+✔ Night 2 drifter steals once and pulse drops stolen motes (96.098166ms)
+✔ Night 3 layout and scheduled wind use simulation ticks (211.102539ms)
+✔ zero flames wins the precedence check over lit lanterns and dawn (256.724639ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3543.996519

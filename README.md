@@ -1,26 +1,26 @@
-# Đảo Đèn Lồng · Phase 1
+# Đảo Đèn Lồng · Phase 2
 
-Điều khiển Mây trên Đảo Bến, thu đom đóm và nạp đủ ánh sáng vào năm Đèn Lồng Lớn.
+Điều khiển Mây qua Đảo Bến, Đảo Cau và Đảo Chuông. Gom đom đóm, thắp đủ đèn rồi sang Đêm tiếp theo.
 
-## Chạy
+## Chạy game
 
-Cần Node.js 20+ và trình duyệt hiện đại. Trong thư mục dự án chạy:
+Cần Node.js 20+ và trình duyệt hiện đại. Mở terminal trong thư mục chứa `serve.mjs`:
 
 ```bash
 node serve.mjs
 ```
 
-Mở http://127.0.0.1:8000. Dùng WASD/phím mũi tên để đi, kéo chuột trên vùng chơi để xoay ngang và nghiêng camera, Q/Z để xoay ngang, Space nhảy, E nạp đèn và F tỏa sáng. Camera bám theo Mây ở khoảng cách cố định 7,5 m.
+Mở http://127.0.0.1:8000 rồi chọn **Bắt đầu**. Dùng **WASD** hoặc phím mũi tên để di chuyển, kéo chuột hoặc **Q/Z** để xoay camera, **Space** để nhảy, **Shift** để lướt, **E** để nạp đèn, **F** để Tỏa Sáng và **Esc/P** để tạm dừng.
 
-Mỗi đom đóm nhặt được cộng 10 điểm, đèn sáng cộng 100 điểm, mỗi Bóng Mực bị choáng cộng 25 điểm. Khi thắng, mỗi giây nguyên còn lại cộng 2 điểm và mỗi lửa còn lại cộng 50 điểm. Mép đảo chặn người chơi. Bị chạm mất lửa nhưng không rơi đom đóm.
-
-Nhấn **Esc** hoặc **Tạm dừng** để nghỉ. Nhấn **Tiếp tục** hoặc **Esc** để chơi tiếp từ vị trí cũ.
+- Mỗi đèn cần 10 đom đóm. Bùa Gió tăng tốc và bỏ hồi chiêu lướt trong 10 giây.
+- Mỗi đom đóm nạp cộng 10 điểm, mỗi đèn sáng cộng 100 điểm, mỗi Bóng Mực trúng Tỏa Sáng cộng 5 điểm. Khi thắng, cộng 2 điểm mỗi giây nguyên còn lại và 50 điểm mỗi Ngọn Lửa còn lại. Bình Minh tổng hợp điểm ba Đêm đã thắng.
+- Menu tạm dừng cho phép tiếp tục, chơi lại Đêm, chỉnh âm lượng và độ nhạy chuột hoặc về menu chính. Hai thanh cài đặt được lưu trong trình duyệt.
 
 ## Kiểm chứng
 
 ```bash
 node --test
-node headless.mjs --seed 42 --night 1 --ticks 600 --out run.jsonl
+node headless.mjs --seed 42 --night 3 --ticks 21600 --out run.jsonl
 ```
 
-Dùng thêm `--scenario file.json`, `--inputs file.json` và `--snapshot-every 10` để tái tạo ca cụ thể. Xem kế hoạch, giả định và kết quả trong [docs/phase-1.md](docs/phase-1.md).
+`--night` nhận 1, 2 hoặc 3. Dùng thêm `--scenario file.json`, `--inputs file.json` và `--snapshot-every 10` để tái tạo ca. Xem [tiêu chí nghiệm thu và kết quả CP2](docs/phase-2.md).

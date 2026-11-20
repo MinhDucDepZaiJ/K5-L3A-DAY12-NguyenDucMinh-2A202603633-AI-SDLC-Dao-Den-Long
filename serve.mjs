@@ -1,7 +1,7 @@
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 const types={'/':['index.html','text/html; charset=utf-8'],'/view.mjs':['view.mjs','text/javascript'],
-  '/camera.mjs':['camera.mjs','text/javascript'],'/game.mjs':['game.mjs','text/javascript'],'/game.contract.json':['game.contract.json','application/json']};
+  '/world.mjs':['world.mjs','text/javascript'],'/camera.mjs':['camera.mjs','text/javascript'],'/game.mjs':['game.mjs','text/javascript'],'/game.contract.json':['game.contract.json','application/json']};
 const port=Number(process.env.PORT??8000);
 createServer(async (req,res)=>{
   const file=Object.hasOwn(types,req.url)?types[req.url]:null;
