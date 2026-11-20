@@ -367,7 +367,7 @@ function draw(now){
     arrow.style.rotate=`${relative}rad`;
   }
   const entities=[
-    ...view.motes.map((m,i)=>({kind:'mote',...m,i})),
+    ...view.motes.map((m,i)=>({...m,kind:'mote',i})),
     ...(decor?.trees??[]).map(pos=>({kind:'tree',pos})),
     ...view.lanterns.map(l=>({kind:'lantern',...l})),
     ...view.shades.map(s=>({kind:'shade',...s})),
@@ -383,20 +383,16 @@ function draw(now){
     if(e.kind==='tree'){
       mesh(tree,e.pos);
     } else if(e.kind==='mote'&&!bench){
-      const [mx,my,mz]=e.pos,flutter=reduceMotion.checked?0:now/100+e.i*2.4;
-      const hover=camera.project([mx+.09*Math.sin(flutter),my+.53+.09*Math.cos(flutter),mz]);
-      if(!hover) continue;
-      const [bx,by,scale]=hover;
+      const [mx,my,mz]=e.pos;
+      const hover=reduceMotion.checked?0:Math.sin(now/220+e.i)*.12;
+      const point=camera.project([mx,my+.55+hover,mz]);
+      if(!point) continue;
+      const [bx,by,scale]=point;
+      const core=Math.max(2,scale*.075);
       const nearPlayer=playerScreen&&Math.hypot(bx-playerScreen[0],by-playerScreen[1])<playerScreen[2]*.54;
-      const wing=Math.max(1.2,scale*.047),body=Math.max(1.25,scale*.036);
-      if(!nearPlayer) glow(bx,by,scale*.25,'#ffe58a88');
-      for(const side of [-1,1]){
-        ctx.beginPath();
-        ctx.ellipse(bx+side*wing*.80,by-wing*.35,wing,wing*.4,side*.48,0,2*Math.PI);
-        ctx.fillStyle='#cbe8c7';ctx.fill();
-      }
-      disk(bx,by,body,'#314335');
-      disk(bx,by+body*.66,body*.84,'#fff6c2');
+      if(!nearPlayer) glow(bx,by,core*3.5,'#ffe58a88');
+      disk(bx,by,core,'#ffe58a');
+      disk(bx-core*.18,by-core*.18,core*.65,'#fff6c2');
     } else if (e.kind==='mote'){
       const b=y-s*(.55+Math.sin(now/220+e.i)*.18);
       glow(x,b,s*.95,'#ffe58a');
@@ -451,7 +447,7 @@ function draw(now){
       disk(x-.19*s,y-.49*s,s*.09,outline);disk(x+.19*s,y-.49*s,s*.09,outline);
     } else if(e.kind==='benchmark-player'){
       disk(x,y-.65*s,.31*s,'#e8e2d0');disk(x,y-1.24*s,.18*s,'#eaba97');
-    } else {
+    } else if(e.kind==='player'){
       const moving=Math.hypot(view.player.vel[0],view.player.vel[2])>.05;
       const stride=moving&&view.player.grounded?Math.sin(now/75)*.13:0;
       const model=mayModel(e.pos,facing,stride);
