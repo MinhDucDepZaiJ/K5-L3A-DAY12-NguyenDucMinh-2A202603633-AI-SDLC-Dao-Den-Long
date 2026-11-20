@@ -1,3 +1,4 @@
+import {decorations,lanternMesh,treeMesh} from './scenery.mjs';
 import {benchmarkScene,frameStats} from './bench-scene.mjs';
 import {mayModel} from './may.mjs';
 import {worlds,ramps} from './world.mjs';
@@ -135,7 +136,7 @@ canvas.addEventListener('pointerdown', event => {
 canvas.addEventListener('pointermove', event => {
   if (drag?.id !== event.pointerId) return;
   yaw = wrapYaw(yaw + (event.clientX - drag.x) * 0.36 * Number(sensitivity.value));
-  pitch = Math.max(8, Math.min(65, pitch + (event.clientY - drag.y) * 0.28 * Number(sensitivity.value)));
+  pitch = Math.max(8, Math.min(76, pitch + (event.clientY - drag.y) * 0.28 * Number(sensitivity.value)));
   drag.x = event.clientX;
   drag.y = event.clientY;
 });
@@ -246,7 +247,7 @@ function reset(){
   view=game.snapshot();
   yaw=0;
   facing=0;
-  pitch=26;
+  pitch=54;
   accumulator=0;
   pulseUntil=0;
   keys.clear();
@@ -264,6 +265,9 @@ const stars=Array.from({length:95},(_,i)=>[(i*0.6180339)%1,(i*0.4142135)%1,0.6+i
 const pressed=(...codes)=>codes.some(code=>keys.has(code));
 const actionDown=action=>[...keys].some(code=>matches(action,code));
 const axis=(positive,negative)=>Number(positive)-Number(negative);
+const islandDecor=bench?null:Object.fromEntries([1,2,3].map(n=>[n,decorations(n)]));
+const tree=bench?null:treeMesh();
+const lampModels=bench?null:[lanternMesh(false,false),lanternMesh(true,false),lanternMesh(true,true)];
 function draw(now){
   const w=bench?1280:canvas.clientWidth,h=bench?720:canvas.clientHeight;
   const ratio=bench?1:Math.min(2,devicePixelRatio);
@@ -288,13 +292,25 @@ function draw(now){
   const [px,py,pz]=view.player.pos;
   const camera=bench
     ?orbitCamera([0,0,0],270-now*360/15000,Math.atan(.5)*180/Math.PI,w,h,Math.hypot(30,15),.5)
-    :orbitCamera([px,py+1.1,pz],yaw,pitch,w,h);
+    :orbitCamera([px,py+.65,pz],yaw,pitch,w,h,10.8);
   function polygon(vertices, color){
     const points=camera.polygon(vertices);
     if (points.length<3) return;
     ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
     for (const [x,y] of points.slice(1)) ctx.lineTo(x,y);
     ctx.closePath();ctx.fillStyle=color;ctx.fill();
+  }
+  function mesh(faces,pos){
+    const sorted=faces.map(({vertices,color})=>{
+      const points=camera.polygon(vertices.map(v=>v.map((value,i)=>value+pos[i])));
+      const depth=points.reduce((sum,p)=>sum+p[3],0)/points.length;
+      return {points,color,depth};
+    }).filter(({points})=>points.length>=3).sort((a,b)=>b.depth-a.depth);
+    for(const {points,color} of sorted){
+      ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
+      for(const [x,y] of points.slice(1)) ctx.lineTo(x,y);
+      ctx.closePath();ctx.fillStyle=color;ctx.fill();
+    }
   }
   function disk(x,y,r,color){
     ctx.beginPath();ctx.arc(x,y,Math.max(0,r),0,Math.PI*2);
@@ -319,6 +335,9 @@ function draw(now){
     }
     polygon(rim,groundColor);
   }
+  const decor=islandDecor?.[night];
+  for(const tile of decor?.paving??[]) polygon(tile.vertices,tile.color);
+  for(const patch of decor?.ground??[]) if(patch.vertices[0][1]<.1) polygon(patch.vertices,patch.color);
   if(night===3){
     const segment=Array.from({length:25},(_,i)=>i*Math.PI/24);
     for(let i=1;i<segment.length;i++){
@@ -334,6 +353,7 @@ function draw(now){
       const [x,y,s]=tower;ctx.fillStyle='#6b4a2f';ctx.fillRect(x-2*s,y-8*s,4*s,8*s);
     }
   }
+  for(const patch of decor?.ground??[]) if(patch.vertices[0][1]>.1) polygon(patch.vertices,patch.color);
   for(const pad of world.pads??[]){
     const [x,y,z]=pad.pos;
     polygon(circle.map(([a,b])=>[x+a,y+.02,z+b]),'#c9b48a');
@@ -348,6 +368,7 @@ function draw(now){
   }
   const entities=[
     ...view.motes.map((m,i)=>({kind:'mote',...m,i})),
+    ...(decor?.trees??[]).map(pos=>({kind:'tree',pos})),
     ...view.lanterns.map(l=>({kind:'lantern',...l})),
     ...view.shades.map(s=>({kind:'shade',...s})),
     ...view.drifters.map(d=>({...d,kind:'drifter'})),
@@ -357,11 +378,47 @@ function draw(now){
   const visible=entities.map(e=>({e,point:camera.project(e.pos)}))
     .filter(({point})=>point)
     .sort((a,b)=>b.point[3]-a.point[3]);
+  const playerScreen=bench?null:camera.project([px,py+1,pz]);
   for (const {e,point:[x,y,s]} of visible){
-    if (e.kind==='mote'){
+    if(e.kind==='tree'){
+      mesh(tree,e.pos);
+    } else if(e.kind==='mote'&&!bench){
+      const [mx,my,mz]=e.pos,flutter=reduceMotion.checked?0:now/100+e.i*2.4;
+      const hover=camera.project([mx+.09*Math.sin(flutter),my+.53+.09*Math.cos(flutter),mz]);
+      if(!hover) continue;
+      const [bx,by,scale]=hover;
+      const nearPlayer=playerScreen&&Math.hypot(bx-playerScreen[0],by-playerScreen[1])<playerScreen[2]*.54;
+      const wing=Math.max(1.2,scale*.047),body=Math.max(1.25,scale*.036);
+      if(!nearPlayer) glow(bx,by,scale*.25,'#ffe58a88');
+      for(const side of [-1,1]){
+        ctx.beginPath();
+        ctx.ellipse(bx+side*wing*.80,by-wing*.35,wing,wing*.4,side*.48,0,2*Math.PI);
+        ctx.fillStyle='#cbe8c7';ctx.fill();
+      }
+      disk(bx,by,body,'#314335');
+      disk(bx,by+body*.66,body*.84,'#fff6c2');
+    } else if (e.kind==='mote'){
       const b=y-s*(.55+Math.sin(now/220+e.i)*.18);
       glow(x,b,s*.95,'#ffe58a');
       disk(x,b,s*.125,'#fff6c2');
+    } else if(e.kind==='lantern'&&!bench){
+      const low=e.lit&&e.fuel<tuning.low_fuel_threshold;
+      const dim=low&&!reduceMotion.checked&&now%1000>=500;
+      const head=camera.project([e.pos[0],e.pos[1]+1.68,e.pos[2]]);
+      if(e.lit&&!dim&&head) glow(head[0],head[1],head[2]*2.25,'#ffb34770');
+      mesh(lampModels[e.lit?(dim?2:1):0],e.pos);
+      const label=camera.project([e.pos[0],e.pos[1]+2.65,e.pos[2]]);
+      if(label){
+        const [lx,ly,scale]=label,width=Math.max(18,scale*.85);
+        ctx.font='12px system-ui';ctx.fillStyle='#fff4de';
+        ctx.fillText(e.id,lx+width*.56,ly+4);
+        if(e.lit){
+          ctx.fillStyle='#15172b';ctx.fillRect(lx-width/2,ly,width,5);
+          ctx.fillStyle=low?(palette.checked?'#fff':dim?'#b36c57':'#ff5a5f'):'#f2c14e';
+          ctx.fillRect(lx-width/2,ly,width*e.fuel/tuning.fuel_max,5);
+          if(low&&palette.checked) ctx.fillText('⚠',lx-width/2-13,ly+5);
+        }
+      }
     } else if (e.kind==='lantern'){
       const low=e.lit&&e.fuel<tuning.low_fuel_threshold;
       const dim=low&&!reduceMotion.checked&&now%1000>=500;

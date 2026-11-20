@@ -63,6 +63,14 @@ export function mayModel(pos,yaw,stride){
       [side*.046,1.593,.147]],'#352338');
   }
 
+  // Woven palm-leaf hat and a short red chin strap.
+  loft([[0,1.74,0,.34,.34],[0,1.775,0,.35,.35],[0,1.99,0,.036,.036],[0,2.01,0,.004,.004]],
+    ['#e7c890','#ba925f','#f6ddad']);
+  loft([[0,1.745,0,.345,.345],[0,1.756,0,.349,.349]],['#8d6749','#6b4a34','#c09c6c']);
+  for(const side of [-1,1]){
+    face([[side*.145,1.76,.086],[side*.151,1.76,.091],[side*.097,1.46,.112],[side*.087,1.46,.117]],red[1]);
+  }
+
   // Handle starts at the right palm; the lantern hangs below it.
   loft([[.32,.875,.286,.014,.014],[.32,1.063,.286,.013,.013]],['#6b4a2f','#4a3325','#bc864c']);
   const lantern=[.32,.72,.286];
