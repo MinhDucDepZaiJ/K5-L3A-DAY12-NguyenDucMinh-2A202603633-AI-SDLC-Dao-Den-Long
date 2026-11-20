@@ -10,7 +10,7 @@ Cần Node.js 20+ và trình duyệt hiện đại. Trong thư mục dự án ch
 node serve.mjs
 ```
 
-Mở http://127.0.0.1:8000. Dùng WASD/phím mũi tên để đi, Q/Z xoay góc nhìn, Space nhảy, E nạp đèn và F tỏa sáng.
+Mở http://127.0.0.1:8000. Dùng WASD/phím mũi tên để đi, kéo chuột trên vùng chơi để xoay ngang và nghiêng camera, Q/Z để xoay ngang, Space nhảy, E nạp đèn và F tỏa sáng. Camera bám theo Mây ở khoảng cách cố định 7,5 m.
 
 Mỗi đom đóm nhặt được cộng 10 điểm, đèn sáng cộng 100 điểm, mỗi Bóng Mực bị choáng cộng 25 điểm. Khi thắng, mỗi giây nguyên còn lại cộng 2 điểm và mỗi lửa còn lại cộng 50 điểm. Mép đảo chặn người chơi. Bị chạm mất lửa nhưng không rơi đom đóm.
 

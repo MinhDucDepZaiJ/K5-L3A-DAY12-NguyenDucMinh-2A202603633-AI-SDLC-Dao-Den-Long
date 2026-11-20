@@ -1,3 +1,4 @@
+import {orbitCamera} from './camera.mjs';
 import {createGame,islandRadius} from './game.mjs';
 const {tuning}=await fetch('./game.contract.json').then(response=>response.json());
 const canvas=document.querySelector('canvas');
@@ -13,11 +14,31 @@ addEventListener('keydown',event=>{
 });
 addEventListener('keyup',event=>keys.delete(event.code));
 addEventListener('blur',()=>keys.clear());
-let game, view, yaw, accumulator, pulseUntil;
+let game, view, yaw, pitch, accumulator, pulseUntil;
+let drag = null;
+const wrapYaw = angle => ((angle % 360) + 360) % 360;
+canvas.addEventListener('pointerdown', event => {
+  if (drag || event.button !== 0 || game.state !== 'playing') return;
+  drag = {id:event.pointerId,x:event.clientX,y:event.clientY};
+  canvas.setPointerCapture(event.pointerId);
+  canvas.classList.add('orbiting');
+});
+canvas.addEventListener('pointermove', event => {
+  if (drag?.id !== event.pointerId) return;
+  yaw = wrapYaw(yaw + (event.clientX - drag.x) * 0.36);
+  pitch = Math.max(8, Math.min(65, pitch + (event.clientY - drag.y) * 0.28));
+  drag.x = event.clientX;
+  drag.y = event.clientY;
+});
+canvas.addEventListener('lostpointercapture', () => {
+  drag = null;
+  canvas.classList.remove('orbiting');
+});
 function reset(){
   game=createGame(tuning,42);
   view=game.snapshot();
   yaw=0;
+  pitch=26;
   accumulator=0;
   pulseUntil=0;
   keys.clear();
@@ -45,19 +66,10 @@ function draw(now){
   ctx.fillStyle='#f1ddaf';
   for (const [x,y,r] of stars) ctx.fillRect(x*w,y*h*.72,r,r);
   const [px,py,pz]=view.player.pos;
-  const a=yaw*Math.PI/180, ca=Math.cos(a),sa=Math.sin(a);
-  const focal=Math.min(w,h)*.94;
-  function project([x,y,z]){
-    const dx=x-px,dz=z-pz;
-    const forward=dx*sa+dz*ca;
-    const lateral=dx*ca-dz*sa;
-    const up=y;
-    const depth=43+forward*.86-up*.51;
-    const s=focal/Math.max(1,depth);
-    return [w*.5+lateral*s,h*.60-(up*.86+forward*.51)*s,s,depth];
-  }
+  const camera=orbitCamera([px,py+1.1,pz],yaw,pitch,w,h);
   function polygon(vertices, color){
-    const points=vertices.map(project);
+    const points=camera.polygon(vertices);
+    if (points.length<3) return;
     ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
     for (const [x,y] of points.slice(1)) ctx.lineTo(x,y);
     ctx.closePath();ctx.fillStyle=color;ctx.fill();
@@ -72,10 +84,16 @@ function draw(now){
     disk(x,y,r,g);
   }
   const ground=(r,y)=>circle.map(([x,z])=>[x*r,y,z*r]);
-  polygon(ground(islandRadius,-2),'#151023');
-  polygon(ground(islandRadius,0),`hsl(${164-lit*9} 25% ${20+lit*4}%)`);
+  const rim=ground(islandRadius,0), base=ground(islandRadius*.93,-3);
+  for (let i=0;i<rim.length;i++){
+    const next=(i+1)%rim.length;
+    polygon([rim[i],rim[next],base[next],base[i]],i%2?'#2e243d':'#272037');
+  }
+  polygon(rim,`hsl(${164-lit*9} 25% ${20+lit*4}%)`);
   for (const [cx,cz] of circle.filter((_,i)=>i%4===0)){
-    const [x,y,s]=project([cx*32,0,cz*32]);
+    const point=camera.project([cx*32,0,cz*32]);
+    if (!point) continue;
+    const [x,y,s]=point;
     disk(x,y,s*.22,'#788975');
   }
   const entities=[
@@ -84,9 +102,10 @@ function draw(now){
     ...view.shades.map(s=>({kind:'shade',...s})),
     {kind:'player',pos:[px,py,pz]}
   ];
-  entities.sort((a,b)=>project(b.pos)[3]-project(a.pos)[3]);
-  for (const e of entities){
-    const [x,y,s]=project(e.pos);
+  const visible=entities.map(e=>({e,point:camera.project(e.pos)}))
+    .filter(({point})=>point)
+    .sort((a,b)=>b.point[3]-a.point[3]);
+  for (const {e,point:[x,y,s]} of visible){
     if (e.kind==='mote'){
       const b=y-s*(.55+Math.sin(now/220+e.i)*.18);
       glow(x,b,s*.95,'#ffc351aa');
@@ -102,8 +121,16 @@ function draw(now){
     } else {
       disk(x,y-.63*s,s*.43,'#48aeb0');
       disk(x,y-1.15*s,s*.33,'#ebae83');
-      polygon([[px-.69*ca,py+1.25,pz+.69*sa],[px,py+1.85,pz],
-        [px+.69*ca,py+1.25,pz-.69*sa]],'#efc379');
+      const hat=circle.filter((_,i)=>i%6===0)
+        .map(([dx,dz])=>[px+dx*.62,py+1.28,pz+dz*.62]);
+      const top=[px,py+1.78,pz];
+      const faces=hat.map((corner,i)=>{
+        const next=hat[(i+1)%hat.length];
+        return {vertices:[corner,next,top],color:i%2?'#efc379':'#dba865',
+          depth:camera.project(corner)[3]+camera.project(next)[3]};
+      });
+      faces.sort((a,b)=>b.depth-a.depth);
+      for (const face of faces) polygon(face.vertices,face.color);
       glow(x+.45*s,y-1.04*s,.8*s,'#ffa545a0');
       disk(x+.45*s,y-1.04*s,.15*s,'#ffd07e');
       if (game.tick<pulseUntil) glow(x,y,s*(7-(pulseUntil-game.tick)/6),'#ffe18299');
@@ -115,7 +142,7 @@ function loop(now){
   last=now;
   while (accumulator>=1/60 && game.state==='playing'){
     accumulator-=1/60;
-    yaw=(yaw+axis(pressed('KeyQ'),pressed('KeyZ'))*2+360)%360;
+    yaw=wrapYaw(yaw+axis(pressed('KeyQ'),pressed('KeyZ'))*2);
     const events=game.step({move:[
       axis(pressed('KeyD','ArrowRight'),pressed('KeyA','ArrowLeft')),
       axis(pressed('KeyW','ArrowUp'),pressed('KeyS','ArrowDown'))

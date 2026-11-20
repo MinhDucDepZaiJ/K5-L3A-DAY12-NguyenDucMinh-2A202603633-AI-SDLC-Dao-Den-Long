@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Đảo Đèn Lồng</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#0c1022;color:#fff1d4;font:16px system-ui}canvas{display:block;width:100vw;height:100vh}
+*{box-sizing:border-box}body{margin:0;background:#0c1022;color:#fff1d4;font:16px system-ui}canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}canvas.orbiting{cursor:grabbing}
 header,footer,aside{position:fixed;padding:1rem 1.4rem;background:#12182eea;border:1px solid #65574c;border-radius:16px}
 header{top:1rem;left:1rem}h1{font:700 1.75rem Georgia;margin:0 0 .4rem}p{margin:.4rem 0}
 footer{bottom:1rem;left:1rem;font-size:.9rem}aside{inset:35% auto auto 50%;transform:translateX(-50%);text-align:center;min-width:240px}
@@ -12,7 +12,7 @@ button{background:#ffc470;border:0;border-radius:8px;color:#161229;padding:.7rem
 </style>
 <canvas aria-label="Sân chơi Đêm 1"></canvas>
 <header><h1>Đảo Đèn Lồng</h1><p>Đêm 1 · Đảo Bến</p><p id="hud">Đang tải…</p><p id="status"></p></header>
-<footer>WASD / ↑↓←→ Di chuyển · Q/Z Xoay góc nhìn · Space Nhảy · E Nạp đèn · F Tỏa sáng</footer>
+<footer>WASD / ↑↓←→ Di chuyển · Kéo chuột / Q/Z Xoay góc nhìn · Space Nhảy · E Nạp đèn · F Tỏa sáng</footer>
 <aside hidden><h2></h2><button>Chơi lại</button></aside>
 <script type="module" src="./view.mjs"></script>
 </html>
