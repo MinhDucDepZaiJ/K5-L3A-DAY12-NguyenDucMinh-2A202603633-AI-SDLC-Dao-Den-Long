@@ -5,7 +5,7 @@ import {writeFileSync} from 'node:fs';
 import {addEntry,readLeaderboard} from './leaderboard.mjs';
 
 const types={'/':['index.html','text/html; charset=utf-8'],'/view.mjs':['view.mjs','text/javascript'],
-  '/scenery.mjs':['scenery.mjs','text/javascript'],'/may.mjs':['may.mjs','text/javascript'],'/world.mjs':['world.mjs','text/javascript'],
+  '/campaign-save.mjs':['campaign-save.mjs','text/javascript'],'/scenery.mjs':['scenery.mjs','text/javascript'],'/may.mjs':['may.mjs','text/javascript'],'/world.mjs':['world.mjs','text/javascript'],
   '/camera.mjs':['camera.mjs','text/javascript'],'/game.mjs':['game.mjs','text/javascript'],
   '/bench-scene.mjs':['bench-scene.mjs','text/javascript'],'/game.contract.json':['game.contract.json','application/json']};
 const port=Number(process.env.PORT??8000);

@@ -1,3 +1,4 @@
+import {readCampaign,writeCampaign,clearCampaign,survivalUnlocked,unlockSurvival,replayCampaign} from './campaign-save.mjs';
 import {decorations,lanternMesh,treeMesh} from './scenery.mjs';
 import {benchmarkScene,frameStats} from './bench-scene.mjs';
 import {mayModel} from './may.mjs';
@@ -69,6 +70,39 @@ const scoreForm=document.getElementById('score-form'),scoreName=document.getElem
 const scoreMessage=document.getElementById('score-message'),rankList=document.getElementById('rank-list');
 let bindings={...defaults},capture=null,nightsWon=0,spawnWarning=null,scorePending=false;
 const campaignSeed=42;
+let extra=false,unlocked=survivalUnlocked(),inputLog=[],previousSavedInput='';
+function saveGame(){
+  if(bench||extra||screen!=='play'||game.state!=='playing') return;
+  writeCampaign({night,total,tick:game.tick,inputs:inputLog,yaw,pitch,facing});
+}
+function saveNextNight(next){
+  writeCampaign({night:next,total,tick:0,inputs:[]});
+}
+addEventListener('pagehide',saveGame);
+document.addEventListener('visibilitychange',()=>{if(document.hidden) saveGame();});
+function resumeCampaign(){
+  const save=readCampaign();
+  if(!save) return menu();
+  extra=false;night=save.night;total=save.total;nightsWon=night-1;
+  reset();
+  if(!replayCampaign(game,save)){
+    clearCampaign();
+    menu();
+    modalDetail.textContent='Bản lưu không thể khôi phục. Hãy bắt đầu lượt mới.';
+    return;
+  }
+  inputLog=save.inputs;
+  previousSavedInput=inputLog.length?JSON.stringify(inputLog.at(-1)[1]):'';
+  if(Number.isFinite(save.yaw)) yaw=wrapYaw(save.yaw);
+  if(Number.isFinite(save.pitch)) pitch=Math.max(8,Math.min(76,save.pitch));
+  if(Number.isFinite(save.facing)) facing=save.facing;
+  view=game.snapshot();
+  last=performance.now();
+}
+function startSurvival(){
+  if(!unlocked) return;
+  extra=true;night=1;reset();
+}
 try{
   Object.assign(bindings,JSON.parse(localStorage.getItem('bindings')??'{}'));
   reduceMotion.checked=JSON.parse(localStorage.getItem(reduceMotion.id)??'false');
@@ -167,9 +201,13 @@ function showDialog(title,detail,action,onAction,extras=[]){
 }
 function menu(){
   screen='menu';
+  const options=[['Tiếp tục trò chơi',resumeCampaign],['Bảng xếp hạng',showLeaderboard],
+    ['Cài đặt',()=>showSettings('menu')]];
+  if(unlocked) options.splice(1,0,['Sinh tồn · AK',startSurvival]);
   showDialog('Đảo Đèn Lồng','Thu đom đóm, châm dầu và giữ đảo sáng đến bình minh.','Bắt đầu',()=>{
-    night=1;total=0;nightsWon=0;intro();
-  },[['Bảng xếp hạng',showLeaderboard],['Cài đặt',()=>showSettings('menu')]]);
+    extra=false;night=1;total=0;nightsWon=0;saveNextNight(1);intro();
+  },options);
+  actions.firstElementChild.disabled=!readCampaign();
 }
 async function showLeaderboard(){
   screen='leaderboard';
@@ -225,9 +263,10 @@ function showSettings(from){
 function openPause(){
   screen='pause';
   showDialog('Đang tạm dừng','Tiếp tục từ vị trí hiện tại.','Tiếp tục',()=>setPaused(false),
-    [['Chơi lại Đêm',reset],['Cài đặt',()=>showSettings('pause')],['Về menu',menu]]);
+    [[extra?'Chơi lại Sinh tồn':'Chơi lại Đêm',reset],['Cài đặt',()=>showSettings('pause')],['Về menu',menu]]);
 }
 function setPaused(value){
+  if(value) saveGame();
   if(game.state!=='playing'||paused===value) return;
   paused=value;keys.clear();stopOrbit();accumulator=0;last=performance.now();
   if(paused) openPause();
@@ -241,9 +280,10 @@ modal.addEventListener('cancel',event=>{
 });
 function reset(){
   screen='play';
-  game=createGame(tuning,campaignSeed,{},night);
+  game=createGame(tuning,campaignSeed,extra?{survival:true}:{},night);
+  inputLog=[];previousSavedInput='';
   spawnWarning=null;
-  locationLabel.textContent=`Đêm ${night} · ${worlds[night].name}`;
+  locationLabel.textContent=extra?'Sinh tồn · Đảo Bến':`Đêm ${night} · ${worlds[night].name}`;
   view=game.snapshot();
   yaw=0;
   facing=0;
@@ -354,6 +394,19 @@ function draw(now){
     }
   }
   for(const patch of decor?.ground??[]) if(patch.vertices[0][1]>.1) polygon(patch.vertices,patch.color);
+  if(!bench&&!extra){
+    const ids=new Set(game.safeLanternIds());
+    for(const lamp of view.lanterns){
+      if(!ids.has(lamp.id)) continue;
+      const [lx,ly,lz]=lamp.pos;
+      const points=camera.polygon(circle.map(([x,z])=>[lx+x*tuning.safe_radius,ly+.04,lz+z*tuning.safe_radius]));
+      if(points.length<3) continue;
+      ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
+      for(const [x,y] of points.slice(1)) ctx.lineTo(x,y);
+      ctx.closePath();ctx.fillStyle='#f3c96930';ctx.fill();
+      ctx.strokeStyle=palette.checked?'#fff6d4':'#ffda74';ctx.lineWidth=1.4;ctx.stroke();
+    }
+  }
   for(const pad of world.pads??[]){
     const [x,y,z]=pad.pos;
     polygon(circle.map(([a,b])=>[x+a,y+.02,z+b]),'#c9b48a');
@@ -450,8 +503,8 @@ function draw(now){
     } else if(e.kind==='player'){
       const moving=Math.hypot(view.player.vel[0],view.player.vel[2])>.05;
       const stride=moving&&view.player.grounded?Math.sin(now/75)*.13:0;
-      const model=mayModel(e.pos,facing,stride);
-      const light=camera.project(model.lantern);
+      const model=mayModel(e.pos,extra?yaw*Math.PI/180:facing,stride,extra);
+      const light=model.lantern&&camera.project(model.lantern);
       if(light) glow(light[0],light[1],light[2]*.48,'#ffb34799');
       const faces=model.faces.map(({vertices,color})=>({points:camera.polygon(vertices),color}))
         .filter(({points})=>points.length>=3)
@@ -474,10 +527,19 @@ function loop(now){
     accumulator-=1/60;
     yaw=wrapYaw(yaw+axis(pressed('KeyQ'),pressed('KeyZ'))*2);
     const wasGrounded=view.player.grounded;
-    const events=game.step({move:[
+    const input={move:[
       axis(actionDown('right'),actionDown('left')),
       axis(actionDown('up'),actionDown('down'))
-    ],cam_yaw_deg:yaw,jump:actionDown('jump'),interact:actionDown('interact'),pulse:actionDown('pulse'),dash:actionDown('dash')});
+    ],cam_yaw_deg:yaw,jump:actionDown('jump'),interact:actionDown('interact'),pulse:actionDown('pulse'),dash:actionDown('dash')};
+    if(!extra){
+      const serialized=JSON.stringify(input);
+      if(serialized!==previousSavedInput){
+        inputLog.push([game.tick,input]);previousSavedInput=serialized;
+      }
+    }
+    const events=game.step(input);
+    if(game.tick%300===0) saveGame();
+    if(events.some(event=>event.name==='survival_shot')) sound(125,.055,.09);
     if (events.some(e=>e.name==='pulse')) pulseUntil=game.tick+24;
     for(const event of events) if(tones[event.name]) sound(tones[event.name]);
     view=game.snapshot();
@@ -498,12 +560,15 @@ function loop(now){
   updateHud();
   if(screen==='play'&&game.state!=='playing'){
     screen='result';pauseButton.disabled=true;stopOrbit();
-    if(game.state==='won'){
+    if(extra){
+      showDialog('Kết thúc sinh tồn',`Sống sót ${view.survival.seconds} giây · ${view.score} điểm · Đợt ${view.survival.wave}`,
+        'Chơi lại',startSurvival,[['Về menu',menu]]);
+    }else if(game.state==='won'){
       total+=view.score;nightsWon++;sound(1046,.55);
-      if(night===3){showDialog('Bình Minh',`Tổng điểm ba Đêm: ${total}`,'Về menu',menu);offerScore();}
-      else showDialog('Đảo đã sáng!',`${view.score} điểm · Tổng: ${total}`,'Đêm tiếp theo',()=>{night++;intro();});
+      if(night===3){unlocked=true;unlockSurvival();clearCampaign();showDialog('Bình Minh',`Tổng điểm ba Đêm: ${total}`,'Về menu',menu,[['Chơi Sinh tồn',startSurvival]]);offerScore();}
+      else {saveNextNight(night+1);showDialog('Đảo đã sáng!',`${view.score} điểm · Tổng: ${total}`,'Đêm tiếp theo',()=>{night++;intro();});}
     }else{
-      sound(130,.6);
+      saveNextNight(night);sound(130,.6);
       showDialog('Đêm đã khép lại',`Điểm các Đêm đã thắng: ${total}`,'Chơi lại Đêm',reset,[['Về menu',menu]]);
       offerScore();
     }
@@ -512,27 +577,29 @@ function loop(now){
 }
 function updateHud(){
   const lit=view.lanterns.filter(l=>l.lit).length;
-  const seconds=Math.ceil(view.time_left_s);
+  const seconds=extra?view.survival.seconds:Math.ceil(view.time_left_s);
   const values={lanterns:`${lit}/${view.lanterns.length}`,flames:String(view.player.flames),
-    motes:`${view.player.carried}/${view.player.capacity}`,
+    motes:extra?`${view.survival.spare} băng`:`${view.player.carried}/${view.player.capacity}`,
     time:`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`,score:String(view.score)};
   for (const [id,value] of Object.entries(values)){
     if (hud[id].textContent!==value) hud[id].textContent=value;
   }
-  hud.time.classList.toggle('urgent',seconds<=30);
+  hud.time.classList.toggle('urgent',!extra&&seconds<=30);
   for(const [i,slot] of [...slots.children].entries()){
-    slot.hidden=i>=view.player.capacity;
+    slot.hidden=extra||i>=view.player.capacity;
     slot.classList.toggle('filled',i<view.player.carried);
   }
   cooldowns.textContent=`${keyName(bindings.dash)} · Lướt ${view.player.dash_cd_s?view.player.dash_cd_s.toFixed(1)+'s':'sẵn sàng'} | ${keyName(bindings.pulse)} · Tỏa sáng ${view.player.pulse_cd_s?view.player.pulse_cd_s.toFixed(1)+'s':'sẵn sàng'}`;
   document.body.classList.toggle('game-paused',paused);
+  document.body.classList.toggle('survival',extra);
+  if(extra) cooldowns.textContent=`AK ${view.survival.rounds}/30 · Đợt ${view.survival.wave} | ${keyName(bindings.pulse)} · Bắn | ${keyName(bindings.interact)} · Nạp đạn`;
   hud.progress.max=view.lanterns.length;
   document.getElementById('goal').textContent=Math.ceil(tuning.win_ratio*view.lanterns.length);
   hud.progress.value=lit;
   const near=view.lanterns.map(l=>({l,d:Math.hypot(l.pos[0]-view.player.pos[0],l.pos[2]-view.player.pos[2])}))
     .filter(({l,d})=>(!l.lit||l.fuel<tuning.fuel_max)&&d<=tuning.interact_radius)
     .sort((a,b)=>a.d-b.d||a.l.id.localeCompare(b.l.id))[0]?.l;
-  const hint=near && !paused && game.state==='playing'
+  const hint=extra?'':near && !paused && game.state==='playing'
     ? (view.player.carried ? (near.lit?`${keyName(bindings.interact)} · Châm dầu (${near.fuel.toFixed(1)}/100)`:`${keyName(bindings.interact)} · Nạp ánh sáng (${near.deposited}/${near.ever_lit?tuning.relight_cost:tuning.lantern_cost})`) : 'Nhặt đom đóm để nạp đèn')
     : (night===3&&view.sim_tick%1800>=1680?'Gió mạnh sắp đến':view.wind.active?'Gió mạnh':'');
   const spawn=screen==='play'&&spawnWarning&&game.tick<spawnWarning.until
@@ -548,7 +615,7 @@ function updateHud(){
   const alerts=[];
   if(spawn) alerts.push('Bóng Mực xuất hiện');
   if(night===3&&view.sim_tick%1800>=1680) alerts.push('Gió mạnh sắp thổi');
-  if(seconds<=10&&seconds>0) alerts.push(`${seconds} giây cuối`);
+  if(!extra&&seconds<=10&&seconds>0) alerts.push(`${seconds} giây cuối`);
   if(view.lanterns.some(l=>l.lit&&l.fuel<tuning.low_fuel_threshold)) alerts.push('Có đèn sắp cạn dầu');
   const caption=screen==='play'?alerts.join(' · '):'';
   if(subtitles.textContent!==caption) subtitles.textContent=caption;

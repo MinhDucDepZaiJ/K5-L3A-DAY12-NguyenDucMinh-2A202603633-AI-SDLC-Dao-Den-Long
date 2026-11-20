@@ -44,3 +44,11 @@ Soak chạy cùng một tiến trình Node, với seed của Đêm đầu là 7 
 Bảng xếp hạng lưu ở `~/.dao-den-long/leaderboard.json`. Đặt biến `LANTERN_DATA_DIR` để đổi vị trí. Tùy chọn đổi phím, giảm chuyển động, chữ lớn và bảng màu nằm trong Cài đặt. Đổi phím, chữ lớn và giảm chuyển động được lưu theo trình duyệt.
 
 Xem [báo cáo CP4](docs/phase-4.md) và [retro](docs/retro.md).
+
+## Bản lưu và chế độ Sinh tồn
+
+Menu chính có **Bắt đầu** và **Tiếp tục trò chơi**. Game giữ một bản lưu trong trình duyệt, tự lưu mỗi 5 giây khi chơi, khi tạm dừng và khi rời trang. Sang Đêm mới sẽ lưu ở đầu Đêm. Sau khi thua, bản lưu cho phép chơi lại Đêm đó.
+
+Vòng vàng quanh đèn biểu thị vùng an toàn. Vòng biến mất khi đèn còn dưới 30 dầu hoặc tắt.
+
+Thắng cả ba Đêm để mở **Sinh tồn · AK**. Xoay camera để ngắm, giữ **F** để bắn và nhấn **E** để nạp. Mỗi đom đóm cho một băng 30 viên, bắt đầu với một băng đã nạp. Mỗi giây sống sót được một điểm. Lượt Sinh tồn chơi riêng, điểm không cộng vào bảng xếp hạng chiến dịch.

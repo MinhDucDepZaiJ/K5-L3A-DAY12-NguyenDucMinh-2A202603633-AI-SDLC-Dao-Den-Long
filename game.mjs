@@ -13,6 +13,8 @@ const terminal=state=>state==='won'||state==='lost';
 
 export function createGame(t,seed,s={},night=1){
   const world=worlds[night];
+  const survival=s.survival===true;
+  let rounds=30,spare=0,nextShot=0,nextWave=1,wave=0;
   let rng=seed>>>0,tick=0,sim=0,score=0,state='playing',previous=initialInput();
   const random=()=>((rng=(Math.imul(rng,1664525)+1013904223)>>>0)/4294967296);
   const choose=items=>items[Math.floor(random()*items.length)];
@@ -59,6 +61,7 @@ export function createGame(t,seed,s={},night=1){
       player:{pos:round(p.pos),flames:p.flames,carried:p.carried,capacity:capacity(),vel:round(vel),grounded,
         invuln:sim<invuln,dash_cd_s:sim<charmUntil?0:expired(dashReady,sim)/60,
         pulse_cd_s:expired(pulseReady,sim)/60,charm_s:expired(charmUntil,sim)/60},
+      ...(survival?{survival:{rounds,spare,seconds:Math.floor(sim/60),wave}}:{}),
       lanterns:lanterns.map(({fuelUnits,...l})=>({...l,pos:round(l.pos),fuel:fuelValue({fuelUnits})})),
       shades:shades.map(q=>({id:q.id,pos:round(q.pos),state:q.state})),
       motes_active:motes.length,motes:motes.map(m=>({id:m.id,pos:round(m.pos),kind:m.kind,
@@ -123,11 +126,12 @@ export function createGame(t,seed,s={},night=1){
   }
 
   function collect(emit){
-    for(let i=0;i<motes.length&&p.carried<capacity();){
+    for(let i=0;i<motes.length&&(survival?spare<capacity():p.carried<capacity());){
       const m=motes[i];
       if(dist(p.pos,m.pos)>1||!raised(p.pos,m.pos)){i++;continue;}
       motes.splice(i,1);
-      emit('mote_picked',{carried:++p.carried});
+      if(survival) emit('magazine_picked',{spare:++spare});
+      else emit('mote_picked',{carried:++p.carried});
     }
     for(const c of charms){
       if(sim<c.until||dist(p.pos,c.pos)>1||!raised(p.pos,c.pos)) continue;
@@ -236,7 +240,7 @@ export function createGame(t,seed,s={},night=1){
     }else{
       const d=dist(q.pos,p.pos);
       const weak=!s.benchmark&&q.state!=='chase'&&nearest(lanterns.filter(l=>l.lit&&l.fuelUnits<lowFuel),q.pos);
-      q.state=!s.benchmark&&!weak&&d<=(q.state==='chase'?18:12)?'chase':'wander';
+      q.state=survival||(!s.benchmark&&!weak&&d<=(q.state==='chase'?18:12))?'chase':'wander';
       speed=night===3?4.5:t.shade_speed;
       const target=q.state==='chase'?{pos:p.pos}:weak||nearest(lanterns.filter(l=>!l.lit),q.pos);
       direction=target?away(target.pos,q.pos):[Math.cos(sim/180),Math.sin(sim/180)];
@@ -286,6 +290,40 @@ export function createGame(t,seed,s={},night=1){
     }
     hit.state='recoil';hit.recoilUntil=sim+60;hit.recoilDir=away(hit.pos,p.pos);
     emit('player_hit',{by:'shade',flames:p.flames,dropped});
+  }
+
+  function survivalShot(input,pressed,emit){
+    if((pressed('interact')||!rounds)&&spare>0&&rounds<30){
+      spare--;rounds=30;nextShot=sim+22;
+      emit('magazine_loaded',{spare});
+    }
+    if(!input.pulse||!rounds||sim<nextShot) return;
+    rounds--;nextShot=sim+8;
+    const angle=input.cam_yaw_deg*Math.PI/180;
+    const direction=[Math.sin(angle),Math.cos(angle)];
+    const targets=shades.map((q,i)=>{
+      const dx=q.pos[0]-p.pos[0],dz=q.pos[2]-p.pos[2];
+      return {i,depth:dx*direction[0]+dz*direction[1],offset:Math.abs(dx*direction[1]-dz*direction[0])};
+    }).filter(q=>q.depth>0&&q.depth<=28&&q.offset<=.8).sort((a,b)=>a.depth-b.depth);
+    const hit=targets[0];
+    if(hit) shades.splice(hit.i,1);
+    emit('survival_shot',{hit:Boolean(hit)});
+  }
+
+  function survivalSpawn(emit){
+    if(sim%180===0&&motes.length<30) spawnMote();
+    if(sim<nextWave) return;
+    wave++;
+    const count=Math.min(12,6+Math.floor(sim/1200));
+    const points=world.fog.filter(pos=>dist(pos,p.pos)>=15&&!safeAt(pos));
+    if(points.length) for(let i=0;i<count&&shades.length<90;i++){
+      const [x,,z]=points.splice(Math.floor(random()*points.length),1)[0];
+      const id='S'+(++shadeId);
+      shades.push({id,pos:[x,.8,z],state:'chase',until:0,pushUntil:0});
+      emit('shade_spawned',{id});
+      if(!points.length) break;
+    }
+    nextWave=sim+Math.max(60,160-Math.floor(sim/600)*10);
   }
 
   function spawn(emit){
@@ -341,16 +379,20 @@ export function createGame(t,seed,s={},night=1){
     if(!respawn&&p.flames>0) movePlayer(input,pressed,emit);
     if(!respawn){
       collect(emit);
-      if(pressed('interact')) interact(emit);
-      if(pressed('pulse')&&sim>=pulseReady&&p.carried>=3) pulse(emit);
+      if(survival) survivalShot(input,pressed,emit);
+      else {
+        if(pressed('interact')) interact(emit);
+        if(pressed('pulse')&&sim>=pulseReady&&p.carried>=3) pulse(emit);
+      }
     }
     for(const d of drifters) moveDrifter(d);
     for(const q of shades) moveShade(q);
     if(!respawn) contacts(emit);
-    spawn(emit);
+    if(survival){survivalSpawn(emit);score=Math.floor(sim/60);}
+    else spawn(emit);
     const lit=lanterns.filter(l=>l.lit);
     const enough=lit.length>=Math.ceil(t.win_ratio*lanterns.length);
-    const reason=p.flames===0?'no_flames':time()===0?(enough?'dawn_survived':'dawn'):null;
+    const reason=p.flames===0?'no_flames':!survival&&time()===0?(enough?'dawn_survived':'dawn'):null;
     if(reason){
       state=reason==='dawn_survived'?'won':'lost';
       if(state==='won') score+=lit.reduce((sum,l)=>sum+t.score.per_dawn_lantern+Math.floor(l.fuelUnits/60),0)
@@ -360,5 +402,5 @@ export function createGame(t,seed,s={},night=1){
     previous={...input};
     return events;
   }
-  return {step,snapshot,get tick(){return tick;},get state(){return state;},get score(){return score;}};
+  return {step,snapshot,safeLanternIds:()=>lanterns.filter(l=>l.lit&&l.fuelUnits>=lowFuel).map(l=>l.id),get tick(){return tick;},get state(){return state;},get score(){return score;}};
 }

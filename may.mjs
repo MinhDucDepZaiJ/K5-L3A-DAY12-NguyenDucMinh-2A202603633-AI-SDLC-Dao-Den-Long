@@ -8,7 +8,7 @@ const hair=['#211927','#342335','#493044'];
 const skin=['#eaba97','#cc8d77','#ffd0ac'];
 const red=['#c8102e','#93112c','#f14a52'];
 
-export function mayModel(pos,yaw,stride){
+export function mayModel(pos,yaw,stride,survival=false){
   const faces=[];
   const c=Math.cos(yaw),s=Math.sin(yaw);
   const point=([x,y,z])=>[pos[0]+x*c+z*s,pos[1]+y,pos[2]-x*s+z*c];
@@ -69,6 +69,13 @@ export function mayModel(pos,yaw,stride){
   loft([[0,1.745,0,.345,.345],[0,1.756,0,.349,.349]],['#8d6749','#6b4a34','#c09c6c']);
   for(const side of [-1,1]){
     face([[side*.145,1.76,.086],[side*.151,1.76,.091],[side*.097,1.46,.112],[side*.087,1.46,.117]],red[1]);
+  }
+
+  if(survival){
+    loft([[.32,1.02,.34,.045,.27],[.32,1.11,.34,.045,.27]],['#454751','#252733','#666978']);
+    loft([[.32,1.04,.66,.021,.11],[.32,1.09,.66,.021,.11]],['#555761','#30313b','#797d83']);
+    loft([[.32,.92,.37,.031,.09],[.32,1.04,.34,.031,.083]],['#49434c','#28252d','#625c66']);
+    return {faces,lantern:null};
   }
 
   // Handle starts at the right palm; the lantern hangs below it.
